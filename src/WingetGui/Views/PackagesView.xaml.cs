@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Storage.Pickers;
 using WingetGui.Core;
+using WinRT.Interop;
 
 namespace WingetGui.Views;
 
@@ -26,6 +28,8 @@ public sealed partial class PackagesView : UserControl
         UpdateAllButton.Visibility = Show(mode == PackageMode.Updates);
         UninstallSelectedButton.Visibility = Show(mode == PackageMode.Installed);
         RefreshButton.Visibility = Show(mode != PackageMode.Search);
+        MoreButton.Visibility = Show(mode == PackageMode.Installed);
+        ScopeBox.SelectedIndex = (int)App.Settings.DefaultInstallScope;
         Status.IsOpen = false;
         UpdateButtons();
 
@@ -60,7 +64,7 @@ public sealed partial class PackagesView : UserControl
         var list = items.ToList();
         List.ItemsSource = list;
         CountText.Text = _mode == PackageMode.Updates
-            ? $"{list.Count(p => p.Update == UpdateState.Available)} available"
+            ? $"{list.Count(p => p.CanUpdate)} available"
             : $"{list.Count} packages";
         UpdateButtons();
     }
@@ -132,8 +136,12 @@ public sealed partial class PackagesView : UserControl
         DetailId.Text = item.Id;
         InstallPanel.Visibility = Show(!item.IsInstalled);
         InstalledPanel.Visibility = Show(item.IsInstalled);
-        UpdateOneButton.IsEnabled = item.Update == UpdateState.Available;
-        UpdateOneButton.Content = item.Update == UpdateState.Available ? $"Update to {item.AvailableVersion}" : "Up to date";
+        UpdateOneButton.IsEnabled = item.CanUpdate;
+        UpdateOneButton.Content = item.CanUpdate ? $"Update to {item.AvailableVersion}" : item.IsPinned ? "Pinned" : "Up to date";
+        // Pins match packages from a source; Add/Remove Programs-only entries can't be pinned.
+        PinButton.Visibility = Show(item.Source.Length > 0 || item.IsPinned);
+        PinButton.Content = item.IsPinned ? "Unpin" : "Pin";
+        ScopeBox.SelectedIndex = (int)App.Settings.DefaultInstallScope;
         DetailPublisher.Text = DetailDescription.Text = DetailLicense.Text = DetailNotes.Text = "";
         DetailDescription.Text = "Loading…";
         DetailHomepage.Visibility = DetailNotesHeader.Visibility = Visibility.Collapsed;
@@ -171,19 +179,19 @@ public sealed partial class PackagesView : UserControl
     {
         var selected = Selected;
         InstallSelectedButton.IsEnabled = selected.Any(p => !p.IsInstalled);
-        UpdateSelectedButton.IsEnabled = selected.Any(p => p.Update == UpdateState.Available);
+        UpdateSelectedButton.IsEnabled = selected.Any(p => p.CanUpdate);
         UninstallSelectedButton.IsEnabled = selected.Count > 0;
         UpdateAllButton.IsEnabled = App.Installed.UpdateCount > 0;
     }
 
     private void InstallSelected_Click(object sender, RoutedEventArgs e) =>
-        Enqueue(Selected.Where(p => !p.IsInstalled), p => App.Install(p, null, InstallScope.Default));
+        Enqueue(Selected.Where(p => !p.IsInstalled), p => App.Install(p, null, App.Settings.DefaultInstallScope));
 
     private void UpdateSelected_Click(object sender, RoutedEventArgs e) =>
-        Enqueue(Selected.Where(p => p.Update == UpdateState.Available), App.Upgrade);
+        Enqueue(Selected.Where(p => p.CanUpdate), App.Upgrade);
 
     private void UpdateAll_Click(object sender, RoutedEventArgs e) =>
-        Enqueue(App.Installed.Items.Where(p => p.Update == UpdateState.Available), App.Upgrade);
+        Enqueue(App.Installed.Items.Where(p => p.CanUpdate), App.Upgrade);
 
     private async void UninstallSelected_Click(object sender, RoutedEventArgs e) => await UninstallAsync(Selected);
 
@@ -199,6 +207,114 @@ public sealed partial class PackagesView : UserControl
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => _ = App.Installed.RefreshAsync();
+
+    private async void Pin_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected.FirstOrDefault() is not { } item)
+            return;
+        PinButton.IsEnabled = false;
+        var result = item.IsPinned ? await WingetCli.UnpinAsync(item) : await WingetCli.PinAsync(item);
+        PinButton.IsEnabled = true;
+        ShowStatus(result.Success ? InfoBarSeverity.Success : InfoBarSeverity.Error, result.Message);
+        if (result.Success)
+            await App.Installed.RefreshAsync();
+    }
+
+    private async void Export_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileSavePicker { SuggestedFileName = $"winget-packages-{DateTime.Now:yyyy-MM-dd}" };
+        picker.FileTypeChoices.Add("winget package list", [".json"]);
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.Window));
+        if (await picker.PickSaveFileAsync() is not { } file)
+            return;
+        LoadingBar.Visibility = Visibility.Visible;
+        var result = await WingetCli.ExportAsync(file.Path, includeVersions: false);
+        LoadingBar.Visibility = Show(App.Installed.IsLoading);
+        ShowStatus(result.Success ? InfoBarSeverity.Success : InfoBarSeverity.Error, result.Message);
+    }
+
+    private async void Import_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker();
+        picker.FileTypeFilter.Add(".json");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(App.Window));
+        if (await picker.PickSingleFileAsync() is not { } file)
+            return;
+        await ImportAsync(file.Path);
+    }
+
+    /// <summary>Reads a winget export file, looks each package up, and after one confirmation queues the ones not installed yet.</summary>
+    internal async Task ImportAsync(string path)
+    {
+        if (_confirming)
+            return;
+        IReadOnlyList<(ImportEntry Entry, PackageItem? Package)> resolved;
+        LoadingBar.Visibility = Visibility.Visible;
+        try
+        {
+            var entries = ImportFile.Parse(await File.ReadAllTextAsync(path));
+            ShowStatus(InfoBarSeverity.Informational, $"Looking up {entries.Count} packages…");
+            resolved = await App.Winget.ResolveAsync(entries);
+        }
+        catch (Exception ex) when (ex is FormatException or IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ShowStatus(InfoBarSeverity.Error, ex.Message);
+            return;
+        }
+        finally
+        {
+            LoadingBar.Visibility = Show(App.Installed.IsLoading);
+        }
+
+        var toInstall = resolved.Where(r => r.Package is { IsInstalled: false }).ToList();
+        var installed = resolved.Count(r => r.Package is { IsInstalled: true });
+        var missing = resolved.Where(r => r.Package is null).Select(r => r.Entry.Id).ToList();
+        var summary = $"{toInstall.Count} to install, {installed} already installed"
+                      + (missing.Count > 0 ? $", {missing.Count} not found: {string.Join(", ", missing.Take(10))}{(missing.Count > 10 ? "…" : "")}" : ".");
+        var name = Path.GetFileName(path);
+        if (toInstall.Count == 0)
+        {
+            ShowStatus(InfoBarSeverity.Informational, $"Nothing to install from {name}: {summary}");
+            return;
+        }
+
+        _confirming = true;
+        try
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = toInstall.Count == 1 ? $"Install {toInstall[0].Package!.Name} from {name}?" : $"Install {toInstall.Count} packages from {name}?",
+                Content = new ScrollViewer
+                {
+                    MaxHeight = 360,
+                    Content = new TextBlock
+                    {
+                        TextWrapping = TextWrapping.Wrap,
+                        Text = summary + Environment.NewLine + Environment.NewLine
+                               + string.Join(Environment.NewLine, toInstall.Select(r => $"{r.Package!.Name} {r.Entry.Version ?? r.Package.AvailableVersion}")),
+                    },
+                },
+                PrimaryButtonText = "Install",
+                CloseButtonText = "Cancel",
+                DefaultButton = ContentDialogButton.Close,
+            };
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                foreach (var (entry, package) in toInstall)
+                    App.Install(package!, entry.Version, App.Settings.DefaultInstallScope);
+                ShowStatus(InfoBarSeverity.Informational, $"{toInstall.Count} installs queued. Progress is on the Activity page.");
+            }
+            else
+            {
+                Status.IsOpen = false; // drop the "Looking up…" message
+            }
+        }
+        finally
+        {
+            _confirming = false;
+        }
+    }
 
     private async Task UninstallAsync(List<PackageItem> packages)
     {

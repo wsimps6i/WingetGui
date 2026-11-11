@@ -17,6 +17,7 @@ public sealed partial class MainWindow : Window
         ["Installed"] = new PackagesView(PackageMode.Installed),
         ["Updates"] = new PackagesView(PackageMode.Updates),
         ["Search"] = new PackagesView(PackageMode.Search),
+        ["Sources"] = new SourcesView(),
         ["Activity"] = new ActivityView(),
         ["Settings"] = new SettingsView(),
     };

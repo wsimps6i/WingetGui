@@ -22,8 +22,18 @@ public sealed class PackageItem
     public string Source { get; init; } = "";
     public UpdateState Update { get; init; }
 
+    /// <summary>winget pin type (Pinning, Blocking, Gating) for an installed package, from `winget pin list`; null when not pinned.</summary>
+    public string? Pin { get; set; }
+
     public bool IsInstalled => InstalledVersion is not null;
     public bool IsUpdateNotApplicable => Update == UpdateState.NotApplicable;
+    public bool IsPinned => Pin is not null;
+
+    /// <summary>Update selected / Update all include it. Any pin keeps a package out, Gating included: a pin means "leave it to me".</summary>
+    public bool CanUpdate => Update == UpdateState.Available && Pin is null;
+
+    /// <summary>Available column text: shows the pin, since a pinned package's update is held back.</summary>
+    public string? AvailableText => Pin is null ? AvailableVersion : $"{AvailableVersion} (pinned)".TrimStart();
 
     /// <summary>ListView uses this as each row's accessible name, so screen readers read the package rather than the type name.</summary>
     public override string ToString() => InstalledVersion is null ? $"{Name}, {Id}" : $"{Name}, {Id}, version {InstalledVersion}";
@@ -39,6 +49,12 @@ public sealed record PackageDetails(
     string? License,
     string? ReleaseNotes,
     IReadOnlyList<string> Versions);
+
+public sealed record SourceInfo(string Name, string Argument, string Type, bool Explicit, string Trust)
+{
+    /// <summary>The ListView row's accessible name.</summary>
+    public override string ToString() => $"{Name}, {Argument}";
+}
 
 public sealed record SearchBatch(string Source, IReadOnlyList<PackageItem> Items, string? Error);
 

@@ -71,6 +71,39 @@ public sealed class WingetService
             yield return await done;
     }
 
+    public async Task<IReadOnlyList<SourceInfo>> GetSourcesAsync()
+    {
+        var pm = await _pm.Value;
+        return await Task.Run(() => (IReadOnlyList<SourceInfo>)Items(pm.GetPackageCatalogs())
+            .Select(c => new SourceInfo(c.Info.Name, c.Info.Argument, c.Info.Type, c.Info.Explicit, c.Info.TrustLevel.ToString()))
+            .ToList());
+    }
+
+    /// <summary>Finds each import entry's package by exact id in its source (any source if the file didn't name one, or names one not configured here).</summary>
+    public async Task<IReadOnlyList<(ImportEntry Entry, PackageItem? Package)>> ResolveAsync(IReadOnlyList<ImportEntry> entries, CancellationToken ct = default)
+    {
+        var pm = await _pm.Value;
+        return await Task.Run(async () =>
+        {
+            var all = Items(pm.GetPackageCatalogs()).ToList();
+            var connections = new Dictionary<string, PackageCatalog>(StringComparer.OrdinalIgnoreCase);
+            var resolved = new List<(ImportEntry, PackageItem?)>();
+            foreach (var entry in entries)
+            {
+                var source = all.FirstOrDefault(c => c.Info.Name.Equals(entry.Source, StringComparison.OrdinalIgnoreCase));
+                var key = source?.Info.Name ?? "";
+                if (!connections.TryGetValue(key, out var catalog))
+                    connections[key] = catalog = Connect(pm, CompositeSearchBehavior.RemotePackagesFromAllCatalogs, source is null ? all : [source]);
+                var options = new FindPackagesOptions { ResultLimit = 1 };
+                options.Filters.Add(new PackageMatchFilter { Field = PackageMatchField.Id, Option = PackageFieldMatchOption.Equals, Value = entry.Id });
+                var result = await catalog.FindPackagesAsync(options).AsTask(ct);
+                var match = Items(result.Matches).FirstOrDefault();
+                resolved.Add((entry, match is null ? null : ToItem(match.CatalogPackage, source?.Info.Name)));
+            }
+            return (IReadOnlyList<(ImportEntry, PackageItem?)>)resolved;
+        }, ct);
+    }
+
     public Task<PackageDetails> GetDetailsAsync(PackageItem item) => Task.Run(() =>
     {
         var package = item.Package!;
@@ -100,7 +133,8 @@ public sealed class WingetService
             },
         };
         if (version is not null && version != item.Package!.DefaultInstallVersion?.Version)
-            options.PackageVersionId = Items(item.Package.AvailableVersions).First(v => v.Version == version);
+            options.PackageVersionId = Items(item.Package.AvailableVersions).FirstOrDefault(v => v.Version == version)
+                ?? throw new InvalidOperationException($"Version {version} of {item.Name} isn't available any more.");
         return InstallResultOf(await pm.InstallPackageAsync(item.Package, options).AsTask(ct, InstallProgressOf(progress)));
     }
 

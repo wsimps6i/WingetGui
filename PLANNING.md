@@ -64,7 +64,7 @@ Likely NuGet packages: `Microsoft.WindowsAppSDK`, `CommunityToolkit.Mvvm`, `H.No
 
 0. ~~**Spike (go/no-go on the COM API)**~~ **Done — go.** See *Phase 0 findings*. Tiny console app: create the COM objects from an unpackaged .NET 10 process; list installed, find upgrades, search, install with progress and cancel, uninstall. Record which of pins / source add/remove/reset exist in the API on winget 1.29, and what happens when elevated. Outcome decides the CLI fallback list above.
 1. ~~**App shell + core**~~ **Done (v0.1.0).** Navigation, theme, logging, Installed / Updates / Search / details, install-upgrade-uninstall through the operation queue, Activity page with cancel. See *Phase 1 notes*.
-2. **Management**: sources, pins, export/import, Settings page.
+2. ~~**Management**~~ **Done.** Sources page, pins, export/import, default install scope. See *Phase 2 notes*.
 3. **Background**: single instance, tray, update-check timer, toasts, start at sign-in, silent CLI switches.
 4. **Ship**: publish + install scripts, self-update, GitHub release workflow, README/BACKLOG/CHANGELOG.
 
@@ -94,6 +94,16 @@ Build/run: `dotnet build WingetGui.slnx`, `dotnet test tests/WingetGui.Core.Test
 - **Checked in the real app**: 206 installed / 6 updates (PowerShell greyed as not applicable, with tooltip), search across sources with details (publisher, description, homepage, licence, release notes), install and uninstall of `jqlang.jq` from the UI via the queue (list refreshed itself both times), uninstall confirmation, light theme switch. 11 Core tests pass.
 - **Not checked**: Update / Update all on a real package (would change real apps), cancel from the Activity page in the app (covered by queue tests and the Phase 0 spike), version/scope pickers on install, Windows 10, high-contrast themes.
 - **Known limits (Phase 1)**: search results don't refresh after installing from them (the Installed page does); closing the window while an operation runs just closes (Phase 3 adds close-to-tray); no app icon yet.
+
+## Phase 2 notes (2026-11-11)
+
+- **Where things live**: `WingetCli` (Core) is the only winget.exe caller: `pin list/add/remove`, `export`, and elevated `source add/remove/reset`. `ImportFile` parses export files; `WingetService.ResolveAsync` looks each id up (exact match, in the file's source if configured here, else all sources) and `GetSourcesAsync` lists sources through the COM API. UI: new **Sources** page; **Pin/Unpin** in the details pane; **⋯ → Export / Import package list** on the Installed page; **Default install scope** in Settings (used by Install selected, imports, and the details pane's starting choice).
+- **Pins**: loaded alongside the installed list (a pin-list failure only loses the decoration, not the list). Any pin type, Gating included, keeps a package out of Update selected / Update all and the Updates badge count; its Available column says "(pinned)" and its Update button "Pinned". Pinning needs a source package, so Add/Remove-Programs-only entries get no Pin button.
+- **Pin table parsing**: columns come from the header line above the dashes, in winget's fixed order. shortcut: a localised header with a space in an earlier column name would shift columns; reading winget's `pinning.db` is the upgrade if that ever happens. Ids winget shortens with "…" are matched on the shown prefix.
+- **Elevated source commands**: run via `runas` with one UAC prompt; output can't be captured across elevation, so only the exit code is shown (details in `winget --logs`). Name must match `^[A-Za-z0-9._-]{1,64}$`, URL must be absolute https without quotes, type must be one of the two known types: validated before anything reaches the elevated command line (tested). Declined UAC shows "Cancelled at the administrator prompt."
+- **Export** uses `winget export` (exact schema; it warns about packages no source has but still writes the file). **Import** never runs winget import: it resolves, shows "N to install, M already installed, K not found", and after one confirmation queues the installs through the COM API, so each gets progress and cancel. A version in the file that's no longer available fails that one install with a clear message.
+- **Checked in the real app**: Fabrikam/Contoso show as pinned with Update disabled; pin then unpin 7-Zip (verified with `winget pin list` after each); Sources page lists msstore/winget/winget-font with explicit flag; export through the real Save dialog (53 packages); re-import of that file → "0 to install, 53 already installed"; a mixed file → dialog with 1 to install (jq), 1 installed, 1 not found, then cancelled (nothing installed); Settings scope combo. 24 Core tests pass.
+- **Not checked**: source add/remove/reset end to end (needs a UAC click and changes machine-wide sources), confirming an import install, a non-default install scope on a real install, a separate-admin-account machine (the elevated process may not have the winget alias; the error says so).
 
 ## Open questions
 

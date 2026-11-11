@@ -35,7 +35,16 @@
                 <Button x:Name="UpdateSelectedButton" Click="UpdateSelected_Click" Content="Update selected" />
                 <Button x:Name="UpdateAllButton" Click="UpdateAll_Click" Content="Update all" Style="{StaticResource AccentButtonStyle}" />
                 <Button x:Name="UninstallSelectedButton" Click="UninstallSelected_Click" Content="Uninstall selected" />
-                <Button x:Name="RefreshButton" Click="Refresh_Click" ToolTipService.ToolTip="Refresh (F5)">
+                <Button x:Name="MoreButton" AutomationProperties.Name="More" ToolTipService.ToolTip="Export or import a package list">
+                    <FontIcon FontSize="16" Glyph="&#xE712;" />
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <MenuFlyoutItem Click="Export_Click" Text="Export package list…" />
+                            <MenuFlyoutItem Click="Import_Click" Text="Import package list…" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+                <Button x:Name="RefreshButton" AutomationProperties.Name="Refresh" Click="Refresh_Click" ToolTipService.ToolTip="Refresh (F5)">
                     <Button.KeyboardAccelerators>
                         <KeyboardAccelerator Key="F5" />
                     </Button.KeyboardAccelerators>
@@ -101,7 +110,7 @@
                                     Grid.Column="3"
                                     VerticalAlignment="Center"
                                     Opacity="{x:Bind local:PackagesView.DimIf(IsUpdateNotApplicable)}"
-                                    Text="{x:Bind AvailableVersion}"
+                                    Text="{x:Bind AvailableText}"
                                     TextTrimming="CharacterEllipsis"
                                     ToolTipService.ToolTip="{x:Bind local:PackagesView.AvailableTip(IsUpdateNotApplicable)}" />
                                 <TextBlock
@@ -139,7 +148,7 @@
 
                             <StackPanel x:Name="InstallPanel" Spacing="8">
                                 <ComboBox x:Name="VersionBox" HorizontalAlignment="Stretch" Header="Version" />
-                                <ComboBox x:Name="ScopeBox" HorizontalAlignment="Stretch" Header="Scope" SelectedIndex="0">
+                                <ComboBox x:Name="ScopeBox" HorizontalAlignment="Stretch" Header="Scope">
                                     <x:String>Default</x:String>
                                     <x:String>Current user</x:String>
                                     <x:String>All users (machine)</x:String>
@@ -149,6 +158,7 @@
                             <StackPanel x:Name="InstalledPanel" Orientation="Horizontal" Spacing="8">
                                 <Button x:Name="UpdateOneButton" Click="UpdateOne_Click" Content="Update" Style="{StaticResource AccentButtonStyle}" />
                                 <Button Click="UninstallOne_Click" Content="Uninstall" />
+                                <Button x:Name="PinButton" Click="Pin_Click" Content="Pin" />
                             </StackPanel>
 
                             <TextBlock x:Name="DetailDescription" IsTextSelectionEnabled="True" TextWrapping="Wrap" />

@@ -13,6 +13,7 @@ public sealed partial class SettingsView : UserControl
         // Set before the handlers can fire usefully; both handlers only save when the value changed.
         ThemeButtons.SelectedIndex = (int)App.Settings.Theme;
         RetentionBox.Value = App.Settings.LogRetentionDays;
+        ScopeBox.SelectedIndex = (int)App.Settings.DefaultInstallScope;
         VersionText.Text = $"Winget GUI {App.Version}";
     }
 
@@ -24,6 +25,15 @@ public sealed partial class SettingsView : UserControl
         App.Settings.Theme = theme;
         App.Settings.Save();
         App.Window.ApplyTheme(theme);
+    }
+
+    private void Scope_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var scope = (InstallScope)Math.Max(0, ScopeBox.SelectedIndex);
+        if (scope == App.Settings.DefaultInstallScope)
+            return;
+        App.Settings.DefaultInstallScope = scope;
+        App.Settings.Save();
     }
 
     private void Retention_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)

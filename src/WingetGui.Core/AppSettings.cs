@@ -24,6 +24,9 @@ public sealed class AppSettings
 
     public AppTheme Theme { get; set; } = AppTheme.System;
 
+    /// <summary>Scope for Install selected and imports, and the starting choice in the details pane.</summary>
+    public InstallScope DefaultInstallScope { get; set; } = InstallScope.Default;
+
     /// <summary>Days of daily log files to keep, today included.</summary>
     public int LogRetentionDays { get; set; } = 14;
 

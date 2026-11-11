@@ -12,7 +12,8 @@ public sealed class InstalledStore(WingetService winget)
     /// <summary>Raised on the calling (UI) thread when loading starts or finishes.</summary>
     public event Action? Changed;
 
-    public int UpdateCount => Items.Count(p => p.Update == UpdateState.Available);
+    /// <summary>Updates that Update all would install (pinned ones are held back).</summary>
+    public int UpdateCount => Items.Count(p => p.CanUpdate);
 
     /// <summary>A refresh already running is reused rather than started twice.</summary>
     public Task RefreshAsync() => IsLoading ? _refresh! : _refresh = LoadAsync();
@@ -20,11 +21,16 @@ public sealed class InstalledStore(WingetService winget)
     private async Task LoadAsync()
     {
         Changed?.Invoke();
+        var pinsTask = LoadPinsAsync();
         try
         {
-            Items = (await winget.GetInstalledAsync()).OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            var items = (await winget.GetInstalledAsync()).OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+            var pins = await pinsTask;
+            foreach (var item in items)
+                item.Pin = pins.FirstOrDefault(p => p.Matches(item.Id))?.PinType;
+            Items = items;
             Error = null;
-            Log.Info($"Installed: {Items.Count} packages, {UpdateCount} updates");
+            Log.Info($"Installed: {Items.Count} packages, {UpdateCount} updates, {pins.Count} pins");
         }
         catch (Exception ex)
         {
@@ -33,5 +39,19 @@ public sealed class InstalledStore(WingetService winget)
         }
         _refresh = Task.CompletedTask;
         Changed?.Invoke();
+    }
+
+    /// <summary>Pins only decorate the list; if winget.exe can't list them the list still loads.</summary>
+    private static async Task<IReadOnlyList<PinInfo>> LoadPinsAsync()
+    {
+        try
+        {
+            return await WingetCli.GetPinsAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Listing pins failed: {ex.Message}");
+            return [];
+        }
     }
 }
