@@ -66,7 +66,7 @@ Likely NuGet packages: `Microsoft.WindowsAppSDK`, `CommunityToolkit.Mvvm`, `H.No
 1. ~~**App shell + core**~~ **Done (v0.1.0).** Navigation, theme, logging, Installed / Updates / Search / details, install-upgrade-uninstall through the operation queue, Activity page with cancel. See *Phase 1 notes*.
 2. ~~**Management**~~ **Done.** Sources page, pins, export/import, default install scope. See *Phase 2 notes*.
 3. ~~**Background**~~ **Done.** Single instance, tray, update-check timer, notifications, start at sign-in, silent CLI switches, app icon. See *Phase 3 notes*.
-4. **Ship**: publish + install scripts, self-update, GitHub release workflow, README/BACKLOG/CHANGELOG.
+4. **Ship**: publish + install scripts, self-update, GitHub release workflow, README/BACKLOG/CHANGELOG. See *Phase 4 notes*.
 
 Each phase ends runnable; Core tests run with `dotnet test`.
 
@@ -125,8 +125,18 @@ Build/run: `dotnet build WingetGui.slnx`, `dotnet test tests/WingetGui.Core.Test
 - **Clicking a notification** (confirmed by the user): brings the window to the front on the Updates page. Gotcha: the click arrived and the window opened, but **behind** other windows; `Activate()` doesn't take the foreground here, so `ShowAndActivate` also calls `SetForegroundWindow` (allowed right after a notification or tray click).
 - **Not checked**: the tray icon's clicks and menu (hidden in the overflow, not reachable by UI Automation), `-UpdateAll` and `-Import` end to end (would change real apps), close-with-tray-off confirmation, a 6-hour timer tick (only the startup refresh).
 
+## Phase 4 notes (2026-11-11)
+
+- **Repository**: public `wsimps6i/WingetGui` (self-update needs no token). Before the first push the local history was rewritten to swap this machine's real pinned packages in test data and notes for made-up names.
+- **Self-update** (`SelfUpdate` / `UpdateInstaller` in Core): GitHub "latest release" API → newer tag → the exact asset `WingetGui-<version>-win-x64.zip`, its download URL under this repo's `/releases/download/`, and the **`digest` GitHub records for the asset (`sha256:…`): no digest, no update**. Download hashes while writing; mismatch deletes it. Unzip to `%LOCALAPPDATA%\WingetGui\update\<version>` (.NET refuses entries escaping the folder) and require the exe inside to report that version. Then the app starts the *downloaded* exe with `-ApplyUpdate <install folder>` and exits; that copy retries renaming the install folder to `.previous` until the old process has let go (the rename fails while any file is in use), copies itself in, starts the new version, and on failure puts the old folder back and starts it. `.previous` is kept until the next update; the staging folder is cleared at the next start. Debug builds can check but never apply (they'd replace `bin\`).
+- **Checks**: at startup and with each background check, when "Check for new versions of Winget GUI automatically" is on; quiet on failure (logged). A found update puts a dot on Settings; Settings → About Winget GUI has Check / Download and install / What's new.
+- **Installer** (`scripts/Install-WingetGui.ps1`, from MarkItDown-GUI's): release zip given, or next to the script, or built from source. Checks the zip against `SHA256SUMS.txt` when present. Writes a *plain* Start menu shortcut; the app adds its app ID and notification activator on first run (`StartMenuShortcut.Ensure` only rewrites a shortcut pointing at its own exe). `-Uninstall` runs `WingetGui.exe -Unregister` (notification registration + Run key), removes shortcut and folders; `-RemoveSettings` also removes `%LOCALAPPDATA%\WingetGui`.
+- **Release workflow** (`.github/workflows/release.yml`): tag `vX.Y.Z` → test → `publish.ps1 -Version X.Y.Z -Zip` → release with the zip, `SHA256SUMS.txt` and the install script. The tag sets the version; keep `<Version>` in the csproj and CHANGELOG in step.
+- **Gotcha (publish.ps1)**: `$a = if (...) { @("x") }` unwraps to a string, and splatting a string into a native command passes it one character per argument (`/ p : V e r s i o n`). Wrap the whole `if` in `@( )`.
+- **Checked locally**: publish + zip (102 MB) + SHA256SUMS; install from a "downloaded" folder refuses a tampered checksum and installs with the real one; the installed copy upgrades the shortcut (ID + activator) and its update check returns "up to date" (no releases yet). Self-update tests: digest required and well-formed, download must be this repo's, exact asset name, version compare, swap replaces files / refuses a non-install folder / rolls back when a copy fails / waits for the old app (59 tests).
+
 ## Open questions
 
-- App name (placeholder `WingetGui`).
-- GitHub repo for releases/self-update (public or private? a private repo needs a token, which we don't want in the app).
-- Code signing later (SmartScreen will warn on an unsigned exe).
+- ~~App name~~ Winget GUI (`WingetGui`).
+- ~~GitHub repo~~ public `wsimps6i/WingetGui`.
+- Code signing later (SmartScreen will warn on an unsigned exe; it would also let self-update check who released a build, not just that it's the released file).

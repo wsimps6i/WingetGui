@@ -33,6 +33,9 @@ public sealed class AppSettings
     /// <summary>Hours between background update checks while the app runs; 0 turns them off.</summary>
     public int UpdateCheckHours { get; set; } = 6;
 
+    /// <summary>Look for a newer Winget GUI release at startup and with each background check.</summary>
+    public bool CheckForAppUpdates { get; set; } = true;
+
     /// <summary>Days of daily log files to keep, today included.</summary>
     public int LogRetentionDays { get; set; } = 14;
 

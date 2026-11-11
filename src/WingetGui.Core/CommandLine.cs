@@ -1,6 +1,6 @@
 namespace WingetGui.Core;
 
-public enum SilentCommand { Help, ListUpdates, UpdateAll, Install, Export, Import }
+public enum SilentCommand { Help, ListUpdates, UpdateAll, Install, Export, Import, ApplyUpdate, Unregister }
 
 /// <summary>A parsed command line: a silent command (no window), or a normal start, optionally hidden in the tray.</summary>
 public sealed record ParsedCommandLine(SilentCommand? Command, string? Argument, bool StartInTray, string? Error)
@@ -23,6 +23,10 @@ public static class CommandLine
           -Import <file>    Install the packages in a winget export file that aren't installed yet.
           -Help             Show this text.
 
+        Used by the updater and uninstaller:
+          -ApplyUpdate <folder>  Replace the install in <folder> with this copy's files, then start it.
+          -Unregister            Remove notification registration and Start at sign-in.
+
         Switches also work as --name or /name. Exit code: 0 OK, 1 something failed, 2 bad command line.
         Output goes to the console and to the daily log. From a console, use
         start /wait WingetGui.exe -ListUpdates  (or Start-Process -Wait in PowerShell) to wait for it.
@@ -38,6 +42,8 @@ public static class CommandLine
         ["install"] = SilentCommand.Install,
         ["export"] = SilentCommand.Export,
         ["import"] = SilentCommand.Import,
+        ["applyupdate"] = SilentCommand.ApplyUpdate,
+        ["unregister"] = SilentCommand.Unregister,
     };
 
     public static ParsedCommandLine Parse(IReadOnlyList<string> args)
@@ -65,10 +71,10 @@ public static class CommandLine
             if (command is not null)
                 return Fail("Use one switch at a time.");
             command = found;
-            if (found is SilentCommand.Install or SilentCommand.Export or SilentCommand.Import)
+            if (found is SilentCommand.Install or SilentCommand.Export or SilentCommand.Import or SilentCommand.ApplyUpdate)
             {
                 if (i + 1 >= args.Count || args[i + 1].Length == 0 || args[i + 1][0] is '-' or '/')
-                    return Fail($"{a} needs a value: {(found == SilentCommand.Install ? "a package id" : "a file path")}.");
+                    return Fail($"{a} needs a value: {(found == SilentCommand.Install ? "a package id" : found == SilentCommand.ApplyUpdate ? "a folder" : "a file path")}.");
                 argument = args[++i];
             }
         }

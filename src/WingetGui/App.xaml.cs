@@ -21,6 +21,47 @@ public partial class App : Application
 
     public static string IconPath { get; } = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
 
+    public static SelfUpdate Updater { get; } = new(new HttpClient { Timeout = TimeSpan.FromMinutes(10) });
+
+    /// <summary>Where a downloaded update is unpacked before it replaces the install; cleared at startup.</summary>
+    public static string UpdateStagingRoot { get; } = Path.Combine(AppSettings.DataRoot, "update");
+
+    /// <summary>A Debug build runs from bin\, which self-update must not replace; it can still check.</summary>
+#if DEBUG
+    public static bool CanSelfUpdate => false;
+#else
+    public static bool CanSelfUpdate => true;
+#endif
+
+    /// <summary>A newer Winget GUI release, once a check has found one.</summary>
+    public static AvailableUpdate? AppUpdate { get; private set; }
+
+    /// <summary>Raised on the UI thread after each Winget GUI update check.</summary>
+    public static event Action? AppUpdateChanged;
+
+    public static async Task<AvailableUpdate?> CheckForAppUpdateAsync()
+    {
+        AppUpdate = await Updater.CheckAsync(System.Version.Parse(Version));
+        Log.Info(AppUpdate is null ? "Winget GUI is up to date" : $"Winget GUI {AppUpdate.Version.ToString(3)} is available");
+        AppUpdateChanged?.Invoke();
+        return AppUpdate;
+    }
+
+    /// <summary>The automatic check: quiet, failures only logged (offline, rate-limited, nothing released yet…).</summary>
+    private static async Task AutoCheckForAppUpdateAsync()
+    {
+        if (!Settings.CheckForAppUpdates || !CanSelfUpdate)
+            return;
+        try
+        {
+            await CheckForAppUpdateAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Winget GUI update check failed: {ex.Message}");
+        }
+    }
+
     private readonly DispatcherQueue _dispatcher = DispatcherQueue.GetForCurrentThread();
     private DispatcherQueueTimer? _checkTimer;
     private TrayIcon? _tray;
@@ -48,6 +89,17 @@ public partial class App : Application
         if (!Program.StartInTray || openUpdates)
             ShowWindow(openUpdates);
         _ = Installed.RefreshAsync();
+
+        try
+        {
+            if (Directory.Exists(UpdateStagingRoot))
+                Directory.Delete(UpdateStagingRoot, recursive: true); // left over from the last update
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // the updater copy may still be exiting; next start clears it
+        }
+        _ = AutoCheckForAppUpdateAsync();
     }
 
     /// <summary>Shows and focuses the window, from the tray, a notification or a second launch. Safe from any thread.</summary>
@@ -75,6 +127,7 @@ public partial class App : Application
     {
         Log.Info("Scheduled update check");
         _ = Installed.RefreshAsync();
+        _ = AutoCheckForAppUpdateAsync();
     }
 
     /// <summary>After a refresh, notifies about updates not announced before, but only when the window isn't on screen: then the badge says it.</summary>

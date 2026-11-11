@@ -85,9 +85,64 @@ public static partial class Program
         var settings = AppSettings.Load();
         Log.Init(Path.Combine(AppSettings.DataRoot, "logs"), settings.LogRetentionDays);
         Console.WriteLine();
-        var code = Task.Run(() => SilentRunner.RunAsync(commandLine, Console.Out, new WingetService(), settings)).GetAwaiter().GetResult();
+        var code = commandLine.Command switch
+        {
+            SilentCommand.ApplyUpdate => ApplyUpdate(commandLine.Argument!),
+            SilentCommand.Unregister => Unregister(),
+            _ => Task.Run(() => SilentRunner.RunAsync(commandLine, Console.Out, new WingetService(), settings)).GetAwaiter().GetResult(),
+        };
         Console.Out.Flush();
         return code;
+    }
+
+    /// <summary>
+    /// Run from a downloaded, verified copy (see SettingsView): waits for the installed app to exit,
+    /// swaps the install folder's files for this copy's, and starts the new version. On failure the old
+    /// copy is put back and started again, so the user is never left without the app.
+    /// </summary>
+    private static int ApplyUpdate(string installDir)
+    {
+        var exe = Path.Combine(installDir, SelfUpdate.ExeName);
+        try
+        {
+            UpdateInstaller.Swap(AppContext.BaseDirectory, installDir, TimeSpan.FromSeconds(60));
+            Log.Info($"Updated {installDir} to {typeof(Program).Assembly.GetName().Version?.ToString(3)}");
+            Console.WriteLine("Updated.");
+            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = installDir });
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Update failed; the previous version is still installed: {ex}");
+            Console.WriteLine($"Update failed: {ex.Message}");
+            if (File.Exists(exe))
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = installDir });
+            return 1;
+        }
+    }
+
+    /// <summary>For the uninstaller: removes what the app registered for this user outside its folder.</summary>
+    private static int Unregister()
+    {
+        StartMenuShortcut.SetProcessId(); // UnregisterAll acts on the process's app ID
+        var failed = false;
+        try
+        {
+            AppNotificationManager.Default.UnregisterAll();
+            Console.WriteLine("Removed notification registration.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Couldn't remove notification registration: {ex.Message}");
+            failed = true;
+        }
+        if (StartupRegistration.IsEnabled) // only our own entry, pointing at this exe
+        {
+            StartupRegistration.Set(false);
+            Console.WriteLine("Removed Start at sign-in.");
+        }
+        Log.Info("Unregistered for uninstall");
+        return failed ? 1 : 0;
     }
 
     /// <summary>

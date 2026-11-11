@@ -1,0 +1,67 @@
+name: Release
+
+# Push a tag like v0.2.0 to build, test and publish a GitHub Release with the assets self-update expects:
+# WingetGui-<version>-win-x64.zip (GitHub records its SHA-256 digest), SHA256SUMS.txt and Install-WingetGui.ps1.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Resolve version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}" -replace '^v',''
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "Tag ${{ github.ref_name }} must look like v1.2.3" }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Test
+        run: dotnet test tests/WingetGui.Core.Tests -c Release
+
+      - name: Publish and zip
+        shell: pwsh
+        run: ./scripts/publish.ps1 -Version ${{ steps.ver.outputs.version }} -Zip
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $notes = @"
+          ## Install
+
+          Download **WingetGui-$v-win-x64.zip**, **SHA256SUMS.txt** and **Install-WingetGui.ps1** into one folder, then run:
+
+          ``````powershell
+          powershell -ExecutionPolicy Bypass -File .\Install-WingetGui.ps1
+          ``````
+
+          No administrator rights needed. Installs to ``%LOCALAPPDATA%\Programs\Winget GUI`` with a Start menu shortcut.
+          Already installed? Winget GUI updates itself: **Settings → About Winget GUI → Check for updates**.
+
+          Windows 10 1809+ or Windows 11, x64, with winget (App Installer). The app isn't code-signed yet, so SmartScreen may warn.
+
+          See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for what's new.
+          "@
+          gh release create "${{ github.ref_name }}" `
+            "artifacts/WingetGui-$v-win-x64.zip" `
+            "artifacts/SHA256SUMS.txt" `
+            "scripts/Install-WingetGui.ps1" `
+            --title "Winget GUI $v" `
+            --notes $notes

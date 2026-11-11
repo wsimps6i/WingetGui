@@ -46,6 +46,12 @@ public sealed partial class MainWindow : Window
             ActivityBadge.Value = n;
             ActivityBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
         };
+        App.AppUpdateChanged += () =>
+        {
+            // A dot on Settings, where the Winget GUI update card is.
+            if (Nav.SettingsItem is NavigationViewItem settings)
+                settings.InfoBadge = App.AppUpdate is null ? null : new InfoBadge();
+        };
         Nav.SelectedItem = InstalledItem;
     }
 
