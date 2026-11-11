@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 (2026-11-12)
 
 - Settings page laid out as cards in sections, like the Windows Settings app.
 
