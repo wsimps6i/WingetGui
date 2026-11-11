@@ -14,7 +14,46 @@ public sealed partial class SettingsView : UserControl
         ThemeButtons.SelectedIndex = (int)App.Settings.Theme;
         RetentionBox.Value = App.Settings.LogRetentionDays;
         ScopeBox.SelectedIndex = (int)App.Settings.DefaultInstallScope;
+        CloseToTraySwitch.IsOn = App.Settings.CloseToTray;
+        StartupSwitch.IsOn = StartupRegistration.IsEnabled;
+        CheckIntervalBox.SelectedIndex = Math.Max(0, Array.IndexOf(CheckHours, App.Settings.UpdateCheckHours));
         VersionText.Text = $"Winget GUI {App.Version}";
+    }
+
+    private static readonly int[] CheckHours = [0, 1, 3, 6, 12, 24];
+
+    private void CloseToTray_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (CloseToTraySwitch.IsOn == App.Settings.CloseToTray)
+            return;
+        App.Settings.CloseToTray = CloseToTraySwitch.IsOn;
+        App.Settings.Save();
+    }
+
+    private void Startup_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (StartupSwitch.IsOn == StartupRegistration.IsEnabled)
+            return;
+        try
+        {
+            StartupRegistration.Set(StartupSwitch.IsOn);
+            Log.Info($"Start at sign-in {(StartupSwitch.IsOn ? "on" : "off")}");
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        {
+            Log.Error($"Couldn't change Start at sign-in: {ex.Message}");
+            StartupSwitch.IsOn = StartupRegistration.IsEnabled; // e.g. blocked by policy
+        }
+    }
+
+    private void Check_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var hours = CheckHours[Math.Max(0, CheckIntervalBox.SelectedIndex)];
+        if (hours == App.Settings.UpdateCheckHours)
+            return;
+        App.Settings.UpdateCheckHours = hours;
+        App.Settings.Save();
+        ((App)Application.Current).RestartUpdateChecks();
     }
 
     private void Theme_SelectionChanged(object sender, SelectionChangedEventArgs e)

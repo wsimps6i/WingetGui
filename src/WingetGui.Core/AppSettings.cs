@@ -27,6 +27,12 @@ public sealed class AppSettings
     /// <summary>Scope for Install selected and imports, and the starting choice in the details pane.</summary>
     public InstallScope DefaultInstallScope { get; set; } = InstallScope.Default;
 
+    /// <summary>Closing the window hides it to the notification area instead of exiting.</summary>
+    public bool CloseToTray { get; set; } = true;
+
+    /// <summary>Hours between background update checks while the app runs; 0 turns them off.</summary>
+    public int UpdateCheckHours { get; set; } = 6;
+
     /// <summary>Days of daily log files to keep, today included.</summary>
     public int LogRetentionDays { get; set; } = 14;
 

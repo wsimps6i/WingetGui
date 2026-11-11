@@ -14,6 +14,29 @@
                 <x:String>Dark</x:String>
             </RadioButtons>
 
+            <ToggleSwitch
+                x:Name="CloseToTraySwitch"
+                Header="Closing the window keeps Winget GUI running in the notification area"
+                Toggled="CloseToTray_Toggled" />
+
+            <ToggleSwitch
+                x:Name="StartupSwitch"
+                Header="Start at sign-in, hidden in the notification area"
+                Toggled="Startup_Toggled" />
+
+            <ComboBox
+                x:Name="CheckIntervalBox"
+                Width="260"
+                Header="Check for updates in the background"
+                SelectionChanged="Check_SelectionChanged">
+                <x:String>Off</x:String>
+                <x:String>Every hour</x:String>
+                <x:String>Every 3 hours</x:String>
+                <x:String>Every 6 hours</x:String>
+                <x:String>Every 12 hours</x:String>
+                <x:String>Every 24 hours</x:String>
+            </ComboBox>
+
             <ComboBox
                 x:Name="ScopeBox"
                 Width="260"

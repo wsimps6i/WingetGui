@@ -30,6 +30,8 @@ public sealed partial class MainWindow : Window
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
         var scale = GetDpiForWindow(WindowNative.GetWindowHandle(this)) / 96.0;
         AppWindow.Resize(new SizeInt32((int)(1240 * scale), (int)(780 * scale)));
+        AppWindow.SetIcon(App.IconPath);
+        AppWindow.Closing += OnClosing;
         ApplyTheme(App.Settings.Theme);
 
         App.Installed.Changed += () =>
@@ -47,8 +49,62 @@ public sealed partial class MainWindow : Window
         Nav.SelectedItem = InstalledItem;
     }
 
-    public void ShowActivity() =>
-        Nav.SelectedItem = Nav.FooterMenuItems.OfType<NavigationViewItem>().First(i => (string)i.Tag == "Activity");
+    /// <summary>Visible and not minimised: new updates then show as the badge rather than a notification.</summary>
+    public bool IsOnScreen => AppWindow.IsVisible && AppWindow.Presenter is OverlappedPresenter { State: not OverlappedPresenterState.Minimized };
+
+    public void ShowAndActivate()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter)
+            presenter.Restore();
+        AppWindow.Show();
+        Activate();
+        // Activate alone left the window behind others after a notification click (it opened, but unseen).
+        // A click on our notification or tray icon gives this process the right to take the foreground; use it.
+        SetForegroundWindow(WindowNative.GetWindowHandle(this));
+    }
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetForegroundWindow(nint window);
+
+    public void ShowPage(string tag) =>
+        Nav.SelectedItem = Nav.MenuItems.Concat(Nav.FooterMenuItems).OfType<NavigationViewItem>().First(i => (string)i.Tag == tag);
+
+    private bool _confirmingExit;
+
+    /// <summary>Close hides to the tray (setting), or exits, asking first if installs are still queued or running.</summary>
+    private async void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (App.IsExiting)
+            return;
+        args.Cancel = true; // must be set before any await
+        if (App.Settings.CloseToTray)
+        {
+            AppWindow.Hide();
+            return;
+        }
+        if (App.Queue.ActiveCount == 0)
+        {
+            App.Quit();
+            return;
+        }
+        if (_confirmingExit)
+            return; // one dialog at a time
+        _confirmingExit = true;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "Exit while installs are running?",
+            Content = $"{App.Queue.ActiveCount} operation(s) are still queued or running. Exiting cancels those that haven't started; one already running may finish or be cut short.",
+            PrimaryButtonText = "Exit anyway",
+            CloseButtonText = "Keep running",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        var exit = await dialog.ShowAsync() == ContentDialogResult.Primary;
+        _confirmingExit = false;
+        if (exit)
+            App.Quit();
+    }
 
     private void Nav_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args) =>
         Host.Content = _views[args.IsSettingsSelected ? "Settings" : (string)args.SelectedItemContainer.Tag];

@@ -7,6 +7,7 @@
     <RootNamespace>WingetGui</RootNamespace>
     <AssemblyName>WingetGui</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -23,6 +24,8 @@
     <Version>0.1.0</Version>
     <Product>Winget GUI</Product>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
+    <!-- Program.cs supplies Main: command-line switches run without a window, and the app stays single-instance. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,6 +34,8 @@
     <!-- Also referenced by Core, but needed here too: the package copies its native activation dll from build/ targets,
          which only run in projects that reference it directly. Without it: REGDB_E_CLASSNOTREG at new PackageManager(). -->
     <PackageReference Include="Microsoft.WindowsPackageManager.ComInterop" Version="1.29.380" />
+    <!-- WinUI 3 has no notification-area icon API. -->
+    <PackageReference Include="H.NotifyIcon.WinUI" Version="2.4.1" />
   </ItemGroup>
 
   <ItemGroup>
@@ -39,6 +44,13 @@
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Window, tray and notification icon; build-icon.ps1 regenerates it. -->
+    <Content Include="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Remove="Assets\build-icon.ps1;Assets\icon-preview.png" />
+    <None Include="Assets\build-icon.ps1;Assets\icon-preview.png" />
   </ItemGroup>
 
 </Project>
