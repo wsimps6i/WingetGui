@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="WingetGui.Views.PackagesView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:core="using:WingetGui.Core"
+    xmlns:local="using:WingetGui.Views">
+
+    <Grid Padding="24,4,24,16" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <TextBlock x:Name="TitleText" Style="{StaticResource TitleTextBlockStyle}" />
+            <TextBlock
+                x:Name="CountText"
+                VerticalAlignment="Bottom"
+                Margin="0,0,0,5"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </StackPanel>
+
+        <Grid Grid.Row="1" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MaxWidth="480" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="QueryBox" TextChanged="QueryBox_TextChanged" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                <Button x:Name="InstallSelectedButton" Click="InstallSelected_Click" Content="Install selected" Style="{StaticResource AccentButtonStyle}" />
+                <Button x:Name="UpdateSelectedButton" Click="UpdateSelected_Click" Content="Update selected" />
+                <Button x:Name="UpdateAllButton" Click="UpdateAll_Click" Content="Update all" Style="{StaticResource AccentButtonStyle}" />
+                <Button x:Name="UninstallSelectedButton" Click="UninstallSelected_Click" Content="Uninstall selected" />
+                <Button x:Name="RefreshButton" Click="Refresh_Click" ToolTipService.ToolTip="Refresh (F5)">
+                    <Button.KeyboardAccelerators>
+                        <KeyboardAccelerator Key="F5" />
+                    </Button.KeyboardAccelerators>
+                    <FontIcon FontSize="16" Glyph="&#xE72C;" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Grid.Row="2">
+            <ProgressBar x:Name="LoadingBar" IsIndeterminate="True" Visibility="Collapsed" />
+            <InfoBar x:Name="Status" IsClosable="True" />
+        </StackPanel>
+
+        <Grid Grid.Row="3" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="320" />
+            </Grid.ColumnDefinitions>
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Padding="16,0,12,6" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{StaticResource NameColumnWidth}" />
+                        <ColumnDefinition Width="{StaticResource IdColumnWidth}" />
+                        <ColumnDefinition Width="{StaticResource VersionColumnWidth}" />
+                        <ColumnDefinition Width="{StaticResource VersionColumnWidth}" />
+                        <ColumnDefinition Width="{StaticResource SourceColumnWidth}" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Name" />
+                    <TextBlock Grid.Column="1" Style="{StaticResource CaptionTextBlockStyle}" Text="Id" />
+                    <TextBlock Grid.Column="2" Style="{StaticResource CaptionTextBlockStyle}" Text="Installed" />
+                    <TextBlock Grid.Column="3" Style="{StaticResource CaptionTextBlockStyle}" Text="Available" />
+                    <TextBlock Grid.Column="4" Style="{StaticResource CaptionTextBlockStyle}" Text="Source" />
+                </Grid>
+                <ListView
+                    x:Name="List"
+                    Grid.Row="1"
+                    SelectionChanged="List_SelectionChanged"
+                    SelectionMode="Extended">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="core:PackageItem">
+                            <Grid Height="36" ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="{StaticResource NameColumnWidth}" />
+                                    <ColumnDefinition Width="{StaticResource IdColumnWidth}" />
+                                    <ColumnDefinition Width="{StaticResource VersionColumnWidth}" />
+                                    <ColumnDefinition Width="{StaticResource VersionColumnWidth}" />
+                                    <ColumnDefinition Width="{StaticResource SourceColumnWidth}" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock VerticalAlignment="Center" Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{x:Bind Id}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{x:Bind InstalledVersion}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    Grid.Column="3"
+                                    VerticalAlignment="Center"
+                                    Opacity="{x:Bind local:PackagesView.DimIf(IsUpdateNotApplicable)}"
+                                    Text="{x:Bind AvailableVersion}"
+                                    TextTrimming="CharacterEllipsis"
+                                    ToolTipService.ToolTip="{x:Bind local:PackagesView.AvailableTip(IsUpdateNotApplicable)}" />
+                                <TextBlock
+                                    Grid.Column="4"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{x:Bind Source}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+            </Grid>
+
+            <Border
+                Grid.Column="1"
+                Padding="16"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8">
+                <Grid>
+                    <TextBlock
+                        x:Name="DetailsPlaceholder"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="Select a package to see its details."
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                    <ScrollViewer x:Name="Details" Visibility="Collapsed">
+                        <StackPanel Spacing="10">
+                            <TextBlock x:Name="DetailName" Style="{StaticResource SubtitleTextBlockStyle}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="DetailId" Foreground="{ThemeResource TextFillColorSecondaryBrush}" IsTextSelectionEnabled="True" />
+                            <TextBlock x:Name="DetailPublisher" TextWrapping="Wrap" />
+
+                            <StackPanel x:Name="InstallPanel" Spacing="8">
+                                <ComboBox x:Name="VersionBox" HorizontalAlignment="Stretch" Header="Version" />
+                                <ComboBox x:Name="ScopeBox" HorizontalAlignment="Stretch" Header="Scope" SelectedIndex="0">
+                                    <x:String>Default</x:String>
+                                    <x:String>Current user</x:String>
+                                    <x:String>All users (machine)</x:String>
+                                </ComboBox>
+                                <Button Click="InstallOne_Click" Content="Install" Style="{StaticResource AccentButtonStyle}" />
+                            </StackPanel>
+                            <StackPanel x:Name="InstalledPanel" Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="UpdateOneButton" Click="UpdateOne_Click" Content="Update" Style="{StaticResource AccentButtonStyle}" />
+                                <Button Click="UninstallOne_Click" Content="Uninstall" />
+                            </StackPanel>
+
+                            <TextBlock x:Name="DetailDescription" IsTextSelectionEnabled="True" TextWrapping="Wrap" />
+                            <HyperlinkButton x:Name="DetailHomepage" Padding="0" Content="Homepage" />
+                            <TextBlock x:Name="DetailLicense" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="DetailNotesHeader" Style="{StaticResource BodyStrongTextBlockStyle}" Text="Release notes" />
+                            <TextBlock x:Name="DetailNotes" IsTextSelectionEnabled="True" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

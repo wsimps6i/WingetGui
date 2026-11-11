@@ -1,0 +1,250 @@
+using System.Collections.ObjectModel;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using WingetGui.Core;
+
+namespace WingetGui.Views;
+
+public enum PackageMode { Installed, Updates, Search }
+
+/// <summary>The Installed, Updates and Search pages: one list with a details pane, differing only in where the rows come from and which buttons show.</summary>
+public sealed partial class PackagesView : UserControl
+{
+    private readonly PackageMode _mode;
+    private CancellationTokenSource? _search;
+    private int _detailsRequest;
+    private bool _confirming;
+
+    public PackagesView(PackageMode mode)
+    {
+        InitializeComponent();
+        _mode = mode;
+        TitleText.Text = mode.ToString();
+        QueryBox.PlaceholderText = mode == PackageMode.Search ? "Search winget and the Microsoft Store" : "Filter by name or id";
+        InstallSelectedButton.Visibility = Show(mode == PackageMode.Search);
+        UpdateSelectedButton.Visibility = Show(mode != PackageMode.Search);
+        UpdateAllButton.Visibility = Show(mode == PackageMode.Updates);
+        UninstallSelectedButton.Visibility = Show(mode == PackageMode.Installed);
+        RefreshButton.Visibility = Show(mode != PackageMode.Search);
+        Status.IsOpen = false;
+        UpdateButtons();
+
+        if (mode != PackageMode.Search)
+        {
+            App.Installed.Changed += ShowInstalled;
+            ShowInstalled();
+        }
+    }
+
+    public static double DimIf(bool dim) => dim ? 0.45 : 1;
+
+    public static string? AvailableTip(bool notApplicable) => notApplicable
+        ? "A newer version exists, but winget can't upgrade this install in place (for example, it was installed as MSI and the new version is MSIX only)."
+        : null;
+
+    private List<PackageItem> Selected => List.SelectedItems.Cast<PackageItem>().ToList();
+
+    private void ShowInstalled()
+    {
+        LoadingBar.Visibility = Show(App.Installed.IsLoading);
+        if (App.Installed.Error is { } error)
+            ShowStatus(InfoBarSeverity.Error, error);
+
+        IEnumerable<PackageItem> items = App.Installed.Items;
+        if (_mode == PackageMode.Updates)
+            items = items.Where(p => p.Update != UpdateState.None).OrderBy(p => p.Update); // Available before NotApplicable
+        var filter = QueryBox.Text.Trim();
+        if (filter.Length > 0)
+            items = items.Where(p => p.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase)
+                                  || p.Id.Contains(filter, StringComparison.OrdinalIgnoreCase));
+        var list = items.ToList();
+        List.ItemsSource = list;
+        CountText.Text = _mode == PackageMode.Updates
+            ? $"{list.Count(p => p.Update == UpdateState.Available)} available"
+            : $"{list.Count} packages";
+        UpdateButtons();
+    }
+
+    private void QueryBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_mode == PackageMode.Search)
+            _ = SearchAsync(QueryBox.Text.Trim());
+        else
+            ShowInstalled();
+    }
+
+    private async Task SearchAsync(string query)
+    {
+        _search?.Cancel();
+        var cts = _search = new CancellationTokenSource();
+        var results = new ObservableCollection<PackageItem>();
+        if (query.Length < 2)
+        {
+            List.ItemsSource = results;
+            CountText.Text = "";
+            LoadingBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+        try
+        {
+            await Task.Delay(400, cts.Token); // wait for typing to pause
+            List.ItemsSource = results;
+            LoadingBar.Visibility = Visibility.Visible;
+            Status.IsOpen = false;
+            var failed = new List<string>();
+            await foreach (var batch in App.Winget.SearchAsync(query, cts.Token))
+            {
+                foreach (var item in batch.Items)
+                    results.Add(item);
+                if (batch.Error is not null)
+                    failed.Add($"{batch.Source}: {batch.Error}");
+                CountText.Text = $"{results.Count} results";
+            }
+            if (failed.Count > 0)
+                ShowStatus(InfoBarSeverity.Warning, "Some sources couldn't be searched. " + string.Join("; ", failed));
+            LoadingBar.Visibility = Visibility.Collapsed;
+        }
+        catch (OperationCanceledException) { } // superseded by newer typing
+        catch (Exception ex)
+        {
+            LoadingBar.Visibility = Visibility.Collapsed;
+            ShowStatus(InfoBarSeverity.Error, ex.Message);
+        }
+    }
+
+    private async void List_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateButtons();
+        var selected = Selected;
+        var request = ++_detailsRequest;
+        if (selected.Count != 1)
+        {
+            Details.Visibility = Visibility.Collapsed;
+            DetailsPlaceholder.Visibility = Visibility.Visible;
+            DetailsPlaceholder.Text = selected.Count == 0 ? "Select a package to see its details." : $"{selected.Count} packages selected.";
+            return;
+        }
+
+        var item = selected[0];
+        DetailsPlaceholder.Visibility = Visibility.Collapsed;
+        Details.Visibility = Visibility.Visible;
+        DetailName.Text = item.Name;
+        DetailId.Text = item.Id;
+        InstallPanel.Visibility = Show(!item.IsInstalled);
+        InstalledPanel.Visibility = Show(item.IsInstalled);
+        UpdateOneButton.IsEnabled = item.Update == UpdateState.Available;
+        UpdateOneButton.Content = item.Update == UpdateState.Available ? $"Update to {item.AvailableVersion}" : "Up to date";
+        DetailPublisher.Text = DetailDescription.Text = DetailLicense.Text = DetailNotes.Text = "";
+        DetailDescription.Text = "Loading…";
+        DetailHomepage.Visibility = DetailNotesHeader.Visibility = Visibility.Collapsed;
+        VersionBox.ItemsSource = null;
+
+        PackageDetails details;
+        try
+        {
+            details = await App.Winget.GetDetailsAsync(item);
+        }
+        catch (Exception ex)
+        {
+            if (request == _detailsRequest)
+                DetailDescription.Text = $"Couldn't load details: {ex.Message}";
+            return;
+        }
+        if (request != _detailsRequest)
+            return; // the selection moved on while this loaded
+
+        DetailPublisher.Text = details.Publisher is null ? "" : $"by {details.Publisher}";
+        DetailDescription.Text = details.Description ?? "No description.";
+        DetailLicense.Text = details.License is null ? "" : $"Licence: {details.License}";
+        if (Uri.TryCreate(details.Homepage, UriKind.Absolute, out var home) && home.Scheme is "https" or "http")
+        {
+            DetailHomepage.NavigateUri = home;
+            DetailHomepage.Visibility = Visibility.Visible;
+        }
+        DetailNotes.Text = details.ReleaseNotes ?? "";
+        DetailNotesHeader.Visibility = Show(details.ReleaseNotes is not null);
+        VersionBox.ItemsSource = details.Versions;
+        VersionBox.SelectedIndex = details.Versions.Count > 0 ? 0 : -1; // newest first
+    }
+
+    private void UpdateButtons()
+    {
+        var selected = Selected;
+        InstallSelectedButton.IsEnabled = selected.Any(p => !p.IsInstalled);
+        UpdateSelectedButton.IsEnabled = selected.Any(p => p.Update == UpdateState.Available);
+        UninstallSelectedButton.IsEnabled = selected.Count > 0;
+        UpdateAllButton.IsEnabled = App.Installed.UpdateCount > 0;
+    }
+
+    private void InstallSelected_Click(object sender, RoutedEventArgs e) =>
+        Enqueue(Selected.Where(p => !p.IsInstalled), p => App.Install(p, null, InstallScope.Default));
+
+    private void UpdateSelected_Click(object sender, RoutedEventArgs e) =>
+        Enqueue(Selected.Where(p => p.Update == UpdateState.Available), App.Upgrade);
+
+    private void UpdateAll_Click(object sender, RoutedEventArgs e) =>
+        Enqueue(App.Installed.Items.Where(p => p.Update == UpdateState.Available), App.Upgrade);
+
+    private async void UninstallSelected_Click(object sender, RoutedEventArgs e) => await UninstallAsync(Selected);
+
+    private async void UninstallOne_Click(object sender, RoutedEventArgs e) => await UninstallAsync(Selected.Take(1).ToList());
+
+    private void UpdateOne_Click(object sender, RoutedEventArgs e) => Enqueue(Selected.Take(1), App.Upgrade);
+
+    private void InstallOne_Click(object sender, RoutedEventArgs e)
+    {
+        var scope = (InstallScope)Math.Max(0, ScopeBox.SelectedIndex);
+        var version = VersionBox.SelectedItem as string;
+        Enqueue(Selected.Take(1), p => App.Install(p, version, scope));
+    }
+
+    private void Refresh_Click(object sender, RoutedEventArgs e) => _ = App.Installed.RefreshAsync();
+
+    private async Task UninstallAsync(List<PackageItem> packages)
+    {
+        // WinUI allows one ContentDialog at a time; a second ShowAsync throws, and from an async void handler that ends the app.
+        if (packages.Count == 0 || _confirming)
+            return;
+        _confirming = true;
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = packages.Count == 1 ? $"Uninstall {packages[0].Name}?" : $"Uninstall {packages.Count} packages?",
+            Content = string.Join(Environment.NewLine, packages.Take(15).Select(p => p.Name))
+                      + (packages.Count > 15 ? $"{Environment.NewLine}…and {packages.Count - 15} more" : ""),
+            PrimaryButtonText = "Uninstall",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+        };
+        try
+        {
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                Enqueue(packages, App.Uninstall);
+        }
+        finally
+        {
+            _confirming = false;
+        }
+    }
+
+    private void Enqueue(IEnumerable<PackageItem> packages, Action<PackageItem> enqueue)
+    {
+        var count = 0;
+        foreach (var p in packages.ToList())
+        {
+            enqueue(p);
+            count++;
+        }
+        if (count > 0)
+            ShowStatus(InfoBarSeverity.Informational, count == 1 ? "Queued. Progress is on the Activity page." : $"{count} operations queued. Progress is on the Activity page.");
+    }
+
+    private void ShowStatus(InfoBarSeverity severity, string message)
+    {
+        Status.Severity = severity;
+        Status.Message = message;
+        Status.IsOpen = true;
+    }
+
+    private static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
+}

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="WingetGui.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Shared column widths for the package list header and rows, so they line up.
+                 Proportional, so every column shrinks with the window instead of Name collapsing to nothing. -->
+            <GridLength x:Key="NameColumnWidth">3*</GridLength>
+            <GridLength x:Key="IdColumnWidth">2.4*</GridLength>
+            <GridLength x:Key="VersionColumnWidth">1.2*</GridLength>
+            <GridLength x:Key="SourceColumnWidth">64</GridLength>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

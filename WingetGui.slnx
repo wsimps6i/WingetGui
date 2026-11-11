@@ -1,0 +1,12 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+  </Configurations>
+  <Folder Name="/src/">
+    <Project Path="src/WingetGui.Core/WingetGui.Core.csproj" />
+    <Project Path="src/WingetGui/WingetGui.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WingetGui.Core.Tests/WingetGui.Core.Tests.csproj" />
+  </Folder>
+</Solution>

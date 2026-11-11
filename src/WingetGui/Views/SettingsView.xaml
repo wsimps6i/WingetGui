@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="WingetGui.Views.SettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollViewer>
+        <StackPanel MaxWidth="720" Padding="24,4,24,16" HorizontalAlignment="Left" Spacing="12">
+            <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Settings" />
+
+            <RadioButtons x:Name="ThemeButtons" Header="Theme" SelectionChanged="Theme_SelectionChanged">
+                <x:String>Use system setting</x:String>
+                <x:String>Light</x:String>
+                <x:String>Dark</x:String>
+            </RadioButtons>
+
+            <NumberBox
+                x:Name="RetentionBox"
+                Width="200"
+                HorizontalAlignment="Left"
+                Header="Keep log files for (days)"
+                Maximum="365"
+                Minimum="1"
+                SpinButtonPlacementMode="Inline"
+                ValueChanged="Retention_ValueChanged" />
+
+            <Button Click="OpenLogs_Click" Content="Open log folder" />
+
+            <TextBlock x:Name="VersionText" Margin="0,12,0,0" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
