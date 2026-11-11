@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1 (2026-11-11)
+
+- If a self-update can't be applied, the app now says why in Settings (with a dot on Settings) the next time it starts, instead of only in the log.
+
 ## 0.1.0 (2026-11-11)
 
 First release.

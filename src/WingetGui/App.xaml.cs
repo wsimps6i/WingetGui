@@ -33,6 +33,12 @@ public partial class App : Application
     public static bool CanSelfUpdate => true;
 #endif
 
+    /// <summary>Written by a failed -ApplyUpdate, read and removed by the next start.</summary>
+    public static string UpdateFailureFile { get; } = Path.Combine(AppSettings.DataRoot, "update-failed.txt");
+
+    /// <summary>Why the last self-update didn't apply, shown once in Settings; null normally.</summary>
+    public static string? LastUpdateFailure { get; private set; }
+
     /// <summary>A newer Winget GUI release, once a check has found one.</summary>
     public static AvailableUpdate? AppUpdate { get; private set; }
 
@@ -77,6 +83,16 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        try
+        {
+            if (File.Exists(UpdateFailureFile))
+            {
+                LastUpdateFailure = File.ReadAllText(UpdateFailureFile);
+                File.Delete(UpdateFailureFile);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+
         Window = new MainWindow();
         _tray = new TrayIcon(this);
         // Anything installed, upgraded or removed changes the installed list.

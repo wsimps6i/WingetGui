@@ -115,6 +115,13 @@ public static partial class Program
         {
             Log.Error($"Update failed; the previous version is still installed: {ex}");
             Console.WriteLine($"Update failed: {ex.Message}");
+            try
+            {
+                // The restarted old version shows this once (App.LastUpdateFailure), so the failure isn't only in the log.
+                File.WriteAllText(App.UpdateFailureFile,
+                    $"Updating to {typeof(Program).Assembly.GetName().Version?.ToString(3)} didn't work, so this version was kept: {ex.Message}");
+            }
+            catch (Exception writeEx) when (writeEx is IOException or UnauthorizedAccessException) { }
             if (File.Exists(exe))
                 Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = installDir });
             return 1;

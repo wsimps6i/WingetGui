@@ -8,7 +8,6 @@
 - **Pin list parsing** reads `winget pin list`'s table (no JSON output). A localised header with a space in an earlier column name would shift columns; reading winget's `pinning.db` would fix it.
 - **Notifications** depend on the Start menu shortcut (it carries the app ID and click handler). Deleting it stops notifications until the app recreates it on next start. The click handler's CLSID is read from the Windows App SDK's registry entry, which isn't public API.
 - **Search results** don't refresh after installing from them (the Installed page does).
-- An update that fails to apply puts the old version back and restarts it; the reason is only in the log.
 
 ## Not tested yet
 
@@ -16,7 +15,6 @@ Tray icon clicks and menu (UI Automation can't reach the overflow area), `-Updat
 
 ## Ideas
 
-- Show a self-update failure in the app on next start, not just in the log.
 - Release notes for a Winget GUI update shown in the app.
 - Auto-close apps that block their own update (WinGet-Manager does this).
 - More languages.

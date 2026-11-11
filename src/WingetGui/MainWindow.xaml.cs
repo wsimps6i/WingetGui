@@ -50,8 +50,10 @@ public sealed partial class MainWindow : Window
         {
             // A dot on Settings, where the Winget GUI update card is.
             if (Nav.SettingsItem is NavigationViewItem settings)
-                settings.InfoBadge = App.AppUpdate is null ? null : new InfoBadge();
+                settings.InfoBadge = App.AppUpdate is null && App.LastUpdateFailure is null ? null : new InfoBadge();
         };
+        if (App.LastUpdateFailure is not null)
+            DispatcherQueue.TryEnqueue(() => { if (Nav.SettingsItem is NavigationViewItem s) s.InfoBadge = new InfoBadge(); }); // SettingsItem exists once the view has loaded
         Nav.SelectedItem = InstalledItem;
     }
 

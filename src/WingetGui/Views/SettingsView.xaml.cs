@@ -20,6 +20,7 @@ public sealed partial class SettingsView : UserControl
         VersionText.Text = $"Version {App.Version}";
         AppUpdateSwitch.IsOn = App.Settings.CheckForAppUpdates;
         App.AppUpdateChanged += ShowAppUpdate;
+        AppUpdateStatus.Text = App.LastUpdateFailure ?? "";
         ShowAppUpdate();
     }
 
@@ -34,9 +35,11 @@ public sealed partial class SettingsView : UserControl
         InstallAppButton.Content = $"Download and install {update.Version.ToString(3)}";
         InstallAppButton.IsEnabled = App.CanSelfUpdate;
         ReleaseLink.NavigateUri = update.ReleasePage;
-        AppUpdateStatus.Text = App.CanSelfUpdate
+        var available = App.CanSelfUpdate
             ? $"Winget GUI {update.Version.ToString(3)} is available."
             : $"Winget GUI {update.Version.ToString(3)} is available. This is a development build, so it can't update itself; install a release instead.";
+        // Keep a failed last attempt visible above the offer to try again.
+        AppUpdateStatus.Text = App.LastUpdateFailure is null ? available : $"{App.LastUpdateFailure}{Environment.NewLine}{available}";
     }
 
     private void AppUpdate_Toggled(object sender, RoutedEventArgs e)
