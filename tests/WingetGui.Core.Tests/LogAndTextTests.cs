@@ -33,6 +33,14 @@ public class LogAndTextTests
         Assert.Equal(expected, WingetService.Stage(state));
 
     [Fact]
+    public void Progress_shows_percent_and_size_or_stays_indeterminate()
+    {
+        Assert.Equal(new OperationProgress("Downloading 50% (1.0 of 2.0 MB)", 0.5), WingetService.Progress("Downloading", 0.5, 1048576, 2097152));
+        Assert.Equal(new OperationProgress("Installing 25%", 0.25), WingetService.Progress("Installing", 0.25));
+        Assert.Equal(new OperationProgress("Installing…", null), WingetService.Progress("Installing", 0));
+    }
+
+    [Fact]
     public void Failure_includes_installer_code_and_hresult()
     {
         var text = WingetService.Failure("InstallError", 1603, new Exception("Fatal error during installation.") { HResult = unchecked((int)0x8A150011) });

@@ -150,7 +150,9 @@ public sealed class WingetService
         var pm = await _pm.Value;
         var options = new UninstallOptions { PackageUninstallMode = PackageUninstallMode.Silent };
         var r = await pm.UninstallPackageAsync(item.Package!, options)
-            .AsTask(ct, new MapProgress<UninstallProgress>(p => new(Stage(p.State.ToString()), null), progress));
+            .AsTask(ct, new MapProgress<UninstallProgress>(p => p.State == PackageUninstallProgressState.Uninstalling
+                ? Progress("Uninstalling", p.UninstallationProgress)
+                : new(Stage(p.State.ToString()), null), progress));
         return r.Status == UninstallResultStatus.Ok
             ? new(true, r.RebootRequired ? "Uninstalled. Restart to finish." : "Uninstalled.", r.RebootRequired)
             : new(false, Failure(r.Status.ToString(), r.UninstallerErrorCode, r.ExtendedErrorCode));
@@ -194,7 +196,21 @@ public sealed class WingetService
     }
 
     private static MapProgress<InstallProgress> InstallProgressOf(IProgress<OperationProgress> target) =>
-        new(p => new(Stage(p.State.ToString()), p.State == PackageInstallProgressState.Downloading ? p.DownloadProgress : null), target);
+        new(p => p.State switch
+        {
+            PackageInstallProgressState.Downloading => Progress("Downloading", p.DownloadProgress, p.BytesDownloaded, p.BytesRequired),
+            PackageInstallProgressState.Installing => Progress("Installing", p.InstallationProgress),
+            _ => new(Stage(p.State.ToString()), null),
+        }, target);
+
+    /// <summary>"Downloading 42% (12.3 of 29.1 MB)". Exe/MSI installers report no install progress (0), so that stays indeterminate.</summary>
+    internal static OperationProgress Progress(string stage, double fraction, ulong done = 0, ulong total = 0)
+    {
+        if (fraction <= 0) return new(stage + "…", null);
+        var text = $"{stage} {fraction:P0}";
+        if (total > 0) text += $" ({done / 1048576.0:0.0} of {total / 1048576.0:0.0} MB)";
+        return new(text, fraction);
+    }
 
     private static OperationResult InstallResultOf(InstallResult r) => r.Status == InstallResultStatus.Ok
         ? new(true, r.RebootRequired ? "Done. Restart to finish." : "Done.", r.RebootRequired)
