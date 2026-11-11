@@ -11,7 +11,7 @@ public sealed partial class SettingsView : UserControl
     {
         InitializeComponent();
         // Set before the handlers can fire usefully; both handlers only save when the value changed.
-        ThemeButtons.SelectedIndex = (int)App.Settings.Theme;
+        ThemeBox.SelectedIndex = (int)App.Settings.Theme;
         RetentionBox.Value = App.Settings.LogRetentionDays;
         ScopeBox.SelectedIndex = (int)App.Settings.DefaultInstallScope;
         CloseToTraySwitch.IsOn = App.Settings.CloseToTray;
@@ -137,7 +137,7 @@ public sealed partial class SettingsView : UserControl
 
     private void Theme_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        var theme = (AppTheme)Math.Max(0, ThemeButtons.SelectedIndex);
+        var theme = (AppTheme)Math.Max(0, ThemeBox.SelectedIndex);
         if (theme == App.Settings.Theme)
             return;
         App.Settings.Theme = theme;
