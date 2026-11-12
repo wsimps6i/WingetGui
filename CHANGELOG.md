@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4 (2026-11-12)
+
+- The window opens in the middle of the screen, above the taskbar, and fits smaller screens.
+
 ## 0.1.3 (2026-11-12)
 
 - Settings page laid out as cards in sections, like the Windows Settings app.
