@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5 (2026-11-12)
+
+- Settings → About: the update buttons are stacked, so the version and download status are no longer cut off.
+
 ## 0.1.4 (2026-11-12)
 
 - The window opens in the middle of the screen, above the taskbar, and fits smaller screens.
