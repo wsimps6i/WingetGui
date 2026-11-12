@@ -222,11 +222,17 @@ public sealed partial class PackagesView : UserControl
         InstallPanel.Visibility = Show(!item.IsInstalled);
         InstalledPanel.Visibility = Show(item.IsInstalled);
         UpdateOneButton.IsEnabled = item.CanUpdate;
-        UpdateOneButton.Content = item.CanUpdate ? $"Update to {item.AvailableVersion}" : item.IsPinned ? "Pinned" : "Up to date";
+        UpdateOneButton.Content = item.CanUpdate ? $"Update to {item.AvailableVersion}" : item.IsPinned ? "Pinned" : item.IsSkipped ? "Skipped" : "Up to date";
         // Pins match packages from a source; Add/Remove Programs-only entries can't be pinned.
         PinButton.Visibility = Show(item.Source.Length > 0 || item.IsPinned);
         PinButton.Content = item.IsPinned ? "Unpin" : "Pin";
-        ScopeBox.SelectedIndex = (int)App.Settings.DefaultInstallScope;
+        SkipButton.Visibility = Show(item.Update != UpdateState.None && !item.IsPinned);
+        SkipButton.Content = item.IsSkipped ? $"Stop skipping {item.AvailableVersion}" : $"Skip version {item.AvailableVersion}";
+        // Only packages from a source can be installed or updated through winget, so only they get options and an installer.
+        OptionsExpander.Visibility = InstallerPanel.Visibility = Show(item.Source.Length > 0);
+        ShowOptions(item);
+        DetailInstaller.Text = DetailSha.Text = "";
+        DetailDownload.Visibility = Visibility.Collapsed;
         DetailPublisher.Text = DetailDescription.Text = DetailLicense.Text = DetailNotes.Text = "";
         DetailDescription.Text = "Loading…";
         DetailHomepage.Visibility = DetailNotesHeader.Visibility = Visibility.Collapsed;
@@ -258,6 +264,76 @@ public sealed partial class PackagesView : UserControl
         DetailNotesHeader.Visibility = Show(details.ReleaseNotes is not null);
         VersionBox.ItemsSource = details.Versions;
         VersionBox.SelectedIndex = details.Versions.Count > 0 ? 0 : -1; // newest first
+        DetailInstaller.Text = details.Installer is null ? "" : $"Installer: {details.Installer}";
+
+        if (item.Source.Length == 0)
+            return;
+        InstallerDownload? download;
+        try
+        {
+            download = await WingetCli.GetInstallerAsync(item); // a winget.exe run, so it fills in after the rest
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Reading the installer download of {item.Id} failed: {ex.Message}");
+            return;
+        }
+        if (request != _detailsRequest || download is null)
+            return;
+        var file = Path.GetFileName(new Uri(download.Url).LocalPath);
+        DetailDownload.Content = download.Size is { } size ? $"{(file.Length > 0 ? file : "Download")} ({FormatSize(size)})" : file.Length > 0 ? file : "Download";
+        DetailDownload.NavigateUri = new Uri(download.Url);
+        ToolTipService.SetToolTip(DetailDownload, download.Url);
+        DetailDownload.Visibility = Visibility.Visible;
+        DetailSha.Text = download.Sha256 is null ? "" : $"SHA-256 {download.Sha256}";
+    }
+
+    internal static string FormatSize(long bytes) => bytes >= 1 << 30 ? $"{bytes / (double)(1 << 30):0.0} GB"
+        : bytes >= 1 << 20 ? $"{bytes / (double)(1 << 20):0.0} MB"
+        : $"{Math.Max(1, bytes / 1024)} KB";
+
+    private void ShowOptions(PackageItem item)
+    {
+        var saved = App.Settings.OptionsFor(item.Id);
+        ScopeBox.SelectedIndex = (int)(saved.Scope != InstallScope.Default ? saved.Scope : App.Settings.DefaultInstallScope);
+        ArchBox.SelectedIndex = (int)saved.Architecture;
+        ArgsBox.Text = saved.Arguments ?? "";
+        ForgetOptionsButton.Visibility = Show(!saved.IsEmpty);
+        OptionsExpander.IsExpanded = !saved.IsEmpty;
+        OptionsNote.Text = saved.IsEmpty
+            ? "Install uses these once. Remember them to use them for every install and update of this package."
+            : "Remembered: used for every install and update of this package.";
+    }
+
+    private PackageOptions EditedOptions() => new(
+        (InstallScope)Math.Max(0, ScopeBox.SelectedIndex),
+        (InstallArchitecture)Math.Max(0, ArchBox.SelectedIndex),
+        string.IsNullOrWhiteSpace(ArgsBox.Text) ? null : ArgsBox.Text.Trim());
+
+    private void SaveOptions_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected.FirstOrDefault() is not { } item)
+            return;
+        var options = EditedOptions();
+        if (options.Scope == App.Settings.DefaultInstallScope)
+            options = options with { Scope = InstallScope.Default }; // just the preselected default: keep following the setting
+        App.Settings.SetOptions(item.Id, options);
+        Log.Info($"Install options for {item.Id}: {App.Settings.OptionsFor(item.Id)}");
+        ShowOptions(item);
+    }
+
+    private void ForgetOptions_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected.FirstOrDefault() is not { } item)
+            return;
+        App.Settings.SetOptions(item.Id, new PackageOptions());
+        ShowOptions(item);
+    }
+
+    private void Skip_Click(object sender, RoutedEventArgs e)
+    {
+        if (Selected.FirstOrDefault() is { } item)
+            App.Installed.SetSkipped(item, !item.IsSkipped);
     }
 
     private void UpdateButtons()
@@ -270,7 +346,7 @@ public sealed partial class PackagesView : UserControl
     }
 
     private void InstallSelected_Click(object sender, RoutedEventArgs e) =>
-        Enqueue(Selected.Where(p => !p.IsInstalled), p => App.Install(p, null, App.Settings.DefaultInstallScope));
+        Enqueue(Selected.Where(p => !p.IsInstalled), p => App.Install(p, null));
 
     private void UpdateSelected_Click(object sender, RoutedEventArgs e) =>
         Enqueue(Selected.Where(p => p.CanUpdate), App.Upgrade);
@@ -286,9 +362,9 @@ public sealed partial class PackagesView : UserControl
 
     private void InstallOne_Click(object sender, RoutedEventArgs e)
     {
-        var scope = (InstallScope)Math.Max(0, ScopeBox.SelectedIndex);
+        var options = EditedOptions(); // as shown in Install options, remembered or not
         var version = VersionBox.SelectedItem as string;
-        Enqueue(Selected.Take(1), p => App.Install(p, version, scope));
+        Enqueue(Selected.Take(1), p => App.Install(p, version, options));
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => _ = App.Installed.RefreshAsync();
@@ -387,7 +463,7 @@ public sealed partial class PackagesView : UserControl
             if (await dialog.ShowAsync() == ContentDialogResult.Primary)
             {
                 foreach (var (entry, package) in toInstall)
-                    App.Install(package!, entry.Version, App.Settings.DefaultInstallScope);
+                    App.Install(package!, entry.Version);
                 ShowStatus(InfoBarSeverity.Informational, $"{toInstall.Count} installs queued. Progress is on the Activity page.");
             }
             else

@@ -39,6 +39,28 @@ public sealed class AppSettings
     /// <summary>Days of daily log files to keep, today included.</summary>
     public int LogRetentionDays { get; set; } = 14;
 
+    /// <summary>Package id → the one available version the user chose to skip. A newer version shows as an update again.</summary>
+    public Dictionary<string, string> SkippedVersions { get; set; } = [];
+
+    /// <summary>Package id → install options used for every install and update of that package.</summary>
+    public Dictionary<string, PackageOptions> PackageOptions { get; set; } = [];
+
+    public PackageOptions OptionsFor(string id) => PackageOptions.GetValueOrDefault(id) ?? new();
+
+    /// <summary>Options for a new install: the saved ones, with the default install scope when none was saved.</summary>
+    public PackageOptions InstallOptionsFor(string id) =>
+        OptionsFor(id) is { Scope: InstallScope.Default } o ? o with { Scope = DefaultInstallScope } : OptionsFor(id);
+
+    /// <summary>Saves (or, when empty, forgets) a package's options.</summary>
+    public void SetOptions(string id, PackageOptions options)
+    {
+        if (options.IsEmpty)
+            PackageOptions.Remove(id);
+        else
+            PackageOptions[id] = options;
+        Save();
+    }
+
     public static AppSettings Load()
     {
         try

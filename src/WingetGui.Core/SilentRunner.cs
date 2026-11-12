@@ -17,11 +17,11 @@ public static class SilentRunner
         {
             return cl.Command switch
             {
-                SilentCommand.ListUpdates => await ListUpdatesAsync(output, winget),
-                SilentCommand.UpdateAll => await UpdateAllAsync(output, winget),
-                SilentCommand.Install => await InstallAsync(output, winget, cl.Argument!, settings.DefaultInstallScope),
+                SilentCommand.ListUpdates => await ListUpdatesAsync(output, winget, settings),
+                SilentCommand.UpdateAll => await UpdateAllAsync(output, winget, settings),
+                SilentCommand.Install => await InstallAsync(output, winget, cl.Argument!, settings),
                 SilentCommand.Export => Report(output, await WingetCli.ExportAsync(Path.GetFullPath(cl.Argument!), includeVersions: false)),
-                SilentCommand.Import => await ImportAsync(output, winget, Path.GetFullPath(cl.Argument!), settings.DefaultInstallScope),
+                SilentCommand.Import => await ImportAsync(output, winget, Path.GetFullPath(cl.Argument!), settings),
                 _ => Help(output),
             };
         }
@@ -39,29 +39,29 @@ public static class SilentRunner
         return 0;
     }
 
-    private static async Task<InstalledStore> LoadAsync(WingetService winget)
+    private static async Task<InstalledStore> LoadAsync(WingetService winget, AppSettings settings)
     {
-        var store = new InstalledStore(winget);
+        var store = new InstalledStore(winget, settings);
         await store.RefreshAsync();
         return store.Error is null ? store : throw new InvalidOperationException(store.Error);
     }
 
-    private static async Task<int> ListUpdatesAsync(TextWriter output, WingetService winget)
+    private static async Task<int> ListUpdatesAsync(TextWriter output, WingetService winget, AppSettings settings)
     {
-        var store = await LoadAsync(winget);
+        var store = await LoadAsync(winget, settings);
         var rows = store.Items.Where(p => p.Update != UpdateState.None).OrderBy(p => p.Update).ToList();
         foreach (var p in rows)
         {
-            var note = p.IsPinned ? "  (pinned)" : p.IsUpdateNotApplicable ? "  (not applicable: different installer type)" : "";
+            var note = p.IsPinned ? "  (pinned)" : p.IsSkipped ? "  (skipped)" : p.IsUpdateNotApplicable ? "  (not applicable: different installer type)" : "";
             output.WriteLine($"{p.Name}  [{p.Id}]  {p.InstalledVersion} -> {p.AvailableVersion}{note}");
         }
         output.WriteLine($"{store.UpdateCount} update(s) available.");
         return 0;
     }
 
-    private static async Task<int> UpdateAllAsync(TextWriter output, WingetService winget)
+    private static async Task<int> UpdateAllAsync(TextWriter output, WingetService winget, AppSettings settings)
     {
-        var updates = (await LoadAsync(winget)).Items.Where(p => p.CanUpdate).ToList();
+        var updates = (await LoadAsync(winget, settings)).Items.Where(p => p.CanUpdate).ToList();
         if (updates.Count == 0)
         {
             output.WriteLine("Everything is up to date.");
@@ -71,14 +71,14 @@ public static class SilentRunner
         foreach (var p in updates)
         {
             output.WriteLine($"Updating {p.Name} {p.InstalledVersion} -> {p.AvailableVersion}");
-            if (!Report(output, await winget.UpgradeAsync(p, new StageWriter(output), CancellationToken.None), p.Name))
+            if (!Report(output, await winget.UpgradeAsync(p, settings.OptionsFor(p.Id), new StageWriter(output), CancellationToken.None), p.Name))
                 failed++;
         }
         output.WriteLine($"{updates.Count - failed} of {updates.Count} updated.");
         return failed == 0 ? 0 : 1;
     }
 
-    private static async Task<int> InstallAsync(TextWriter output, WingetService winget, string id, InstallScope scope)
+    private static async Task<int> InstallAsync(TextWriter output, WingetService winget, string id, AppSettings settings)
     {
         var (_, package) = (await winget.ResolveAsync([new ImportEntry(id, null, "")]))[0];
         if (package is null)
@@ -92,10 +92,10 @@ public static class SilentRunner
             return 0;
         }
         output.WriteLine($"Installing {package.Name} {package.AvailableVersion}");
-        return Report(output, await winget.InstallAsync(package, null, scope, new StageWriter(output), CancellationToken.None), package.Name) ? 0 : 1;
+        return Report(output, await winget.InstallAsync(package, null, settings.InstallOptionsFor(package.Id), new StageWriter(output), CancellationToken.None), package.Name) ? 0 : 1;
     }
 
-    private static async Task<int> ImportAsync(TextWriter output, WingetService winget, string path, InstallScope scope)
+    private static async Task<int> ImportAsync(TextWriter output, WingetService winget, string path, AppSettings settings)
     {
         var resolved = await winget.ResolveAsync(ImportFile.Parse(await File.ReadAllTextAsync(path)));
         var failed = 0;
@@ -113,7 +113,7 @@ public static class SilentRunner
             else
             {
                 output.WriteLine($"Installing {package.Name} {entry.Version ?? package.AvailableVersion}");
-                if (!Report(output, await winget.InstallAsync(package, entry.Version, scope, new StageWriter(output), CancellationToken.None), package.Name))
+                if (!Report(output, await winget.InstallAsync(package, entry.Version, settings.InstallOptionsFor(package.Id), new StageWriter(output), CancellationToken.None), package.Name))
                     failed++;
             }
         }

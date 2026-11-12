@@ -51,6 +51,42 @@ public static partial class WingetCli
             : Result(exit, output, "");
     }
 
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
+
+    /// <summary>The installer `winget show` would download on this PC (URL, SHA-256), plus its size when the server answers a HEAD request with one.</summary>
+    public static async Task<InstallerDownload?> GetInstallerAsync(PackageItem item, CancellationToken ct = default)
+    {
+        List<string> args = ["show", "--id", item.Id, "--exact", "--accept-source-agreements"];
+        if (item.Source.Length > 0)
+            args.AddRange(["--source", item.Source]);
+        var (exit, output) = await RunAsync(args, ct);
+        if (exit != 0 || ParseInstaller(output) is not { } download)
+            return null; // e.g. Microsoft Store apps, which have no download URL
+        try
+        {
+            using var response = await Http.SendAsync(new HttpRequestMessage(HttpMethod.Head, download.Url), ct);
+            return response.IsSuccessStatusCode && response.Content.Headers.ContentLength is { } size and > 0 ? download with { Size = size } : download;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return download; // the size is a nice-to-have
+        }
+    }
+
+    /// <summary>
+    /// Reads the "Installer Url:" and "Installer SHA256:" lines of `winget show`.
+    /// shortcut: matches winget's English labels; in another display language no installer is shown — switch to the COM API if it ever exposes the URL.
+    /// </summary>
+    internal static InstallerDownload? ParseInstaller(string output)
+    {
+        var lines = output.Split('\n').Select(l => l.Trim()).ToList();
+        string? Value(string label) => lines.FirstOrDefault(l => l.StartsWith(label + ":", StringComparison.OrdinalIgnoreCase))?[(label.Length + 1)..].Trim();
+        var url = Value("Installer Url");
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http"
+            ? new InstallerDownload(url!, Value("Installer SHA256"))
+            : null;
+    }
+
     public static Task<OperationResult> AddSourceAsync(string name, string url, string type, bool isExplicit)
     {
         // These go onto an elevated command line, so only plain names and absolute https URLs get through.

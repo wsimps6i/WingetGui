@@ -122,33 +122,88 @@ public sealed class WingetService
             Blank(meta?.PackageUrl),
             Blank(meta?.License),
             Blank(meta?.ReleaseNotes),
-            Items(package.AvailableVersions).Select(v => v.Version).ToList());
+            Items(package.AvailableVersions).Select(v => v.Version).ToList(),
+            package.DefaultInstallVersion is { } latest ? DescribeInstaller(latest) : null);
     });
 
-    public async Task<OperationResult> InstallAsync(PackageItem item, string? version, InstallScope scope, IProgress<OperationProgress> progress, CancellationToken ct)
+    /// <summary>"MSI · x64 · all users · needs admin" for the installer winget would pick on this PC.</summary>
+    private static string? DescribeInstaller(PackageVersionInfo version)
     {
-        var pm = await _pm.Value;
-        var options = new InstallOptions
+        try
         {
-            PackageInstallMode = PackageInstallMode.Silent,
-            PackageInstallScope = scope switch
-            {
-                InstallScope.User => PackageInstallScope.User,
-                InstallScope.Machine => PackageInstallScope.System,
-                _ => PackageInstallScope.Any,
-            },
-        };
-        if (version is not null && version != item.Package!.DefaultInstallVersion?.Version)
-            options.PackageVersionId = Items(item.Package.AvailableVersions).FirstOrDefault(v => v.Version == version)
-                ?? throw new InvalidOperationException($"Version {version} of {item.Name} isn't available any more.");
-        return InstallResultOf(await pm.InstallPackageAsync(item.Package, options).AsTask(ct, InstallProgressOf(progress)));
+            if (version.GetApplicableInstaller(new InstallOptions()) is not { } i)
+                return null;
+            return DescribeInstaller(i.InstallerType.ToString(), i.NestedInstallerType.ToString(), i.Architecture.ToString(), i.Scope.ToString(), i.ElevationRequirement.ToString());
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Reading the installer of {version.Id} failed: {ex.Message}");
+            return null;
+        }
     }
 
-    public async Task<OperationResult> UpgradeAsync(PackageItem item, IProgress<OperationProgress> progress, CancellationToken ct)
+    internal static string DescribeInstaller(string type, string nested, string architecture, string scope, string elevation)
+    {
+        var kind = type switch
+        {
+            "Wix" => "MSI (WiX)",
+            "Msi" or "Msix" or "Exe" => type.ToUpperInvariant(),
+            "MSStore" => "Microsoft Store",
+            "Zip" when nested != "Unknown" => $"ZIP containing {DescribeInstaller(nested, "Unknown", "", "", "")}",
+            _ => type,
+        };
+        string?[] parts =
+        [
+            kind,
+            architecture is "" or "Neutral" or "Unknown" ? null : architecture.ToLowerInvariant(),
+            scope switch { "User" => "current user", "System" => "all users", _ => null },
+            elevation switch { "ElevationRequired" or "ElevatesSelf" => "needs admin", _ => null },
+        ];
+        return string.Join(" · ", parts.Where(p => p is not null));
+    }
+
+    /// <param name="options">Scope, architecture and extra installer arguments; the caller resolves the default scope.</param>
+    public async Task<OperationResult> InstallAsync(PackageItem item, string? version, PackageOptions options, IProgress<OperationProgress> progress, CancellationToken ct)
     {
         var pm = await _pm.Value;
-        var options = new InstallOptions { PackageInstallMode = PackageInstallMode.Silent };
-        return InstallResultOf(await pm.UpgradePackageAsync(item.Package!, options).AsTask(ct, InstallProgressOf(progress)));
+        var install = InstallOptionsOf(options);
+        install.PackageInstallScope = options.Scope switch
+        {
+            InstallScope.User => PackageInstallScope.User,
+            InstallScope.Machine => PackageInstallScope.System,
+            _ => PackageInstallScope.Any,
+        };
+        if (version is not null && version != item.Package!.DefaultInstallVersion?.Version)
+            install.PackageVersionId = Items(item.Package.AvailableVersions).FirstOrDefault(v => v.Version == version)
+                ?? throw new InvalidOperationException($"Version {version} of {item.Name} isn't available any more.");
+        return InstallResultOf(await pm.InstallPackageAsync(item.Package, install).AsTask(ct, InstallProgressOf(progress)));
+    }
+
+    /// <param name="options">Architecture and extra arguments apply; scope doesn't, so the update keeps the installed scope.</param>
+    public async Task<OperationResult> UpgradeAsync(PackageItem item, PackageOptions options, IProgress<OperationProgress> progress, CancellationToken ct)
+    {
+        var pm = await _pm.Value;
+        return InstallResultOf(await pm.UpgradePackageAsync(item.Package!, InstallOptionsOf(options)).AsTask(ct, InstallProgressOf(progress)));
+    }
+
+    private static InstallOptions InstallOptionsOf(PackageOptions options)
+    {
+        var install = new InstallOptions { PackageInstallMode = PackageInstallMode.Silent };
+        switch (options.Architecture)
+        {
+            case InstallArchitecture.X64:
+                install.AllowedArchitectures.Add(Windows.System.ProcessorArchitecture.X64);
+                break;
+            case InstallArchitecture.X86:
+                install.AllowedArchitectures.Add(Windows.System.ProcessorArchitecture.X86);
+                break;
+            case InstallArchitecture.Arm64 when OperatingSystem.IsWindowsVersionAtLeast(10, 0, 18362): // Windows 10 1809 has no Arm64 value; leave it to winget there
+                install.AllowedArchitectures.Add(Windows.System.ProcessorArchitecture.Arm64);
+                break;
+        }
+        if (!string.IsNullOrWhiteSpace(options.Arguments))
+            install.AdditionalInstallerArguments = options.Arguments.Trim(); // added to the silent switches, not replacing them
+        return install;
     }
 
     public async Task<OperationResult> UninstallAsync(PackageItem item, IProgress<OperationProgress> progress, CancellationToken ct)

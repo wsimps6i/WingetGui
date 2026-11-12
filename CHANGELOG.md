@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.7 (2026-11-12)
+
+- Skip a version: hide one available version of a package from updates (Update all, the count, notifications and `-UpdateAll`); a newer version shows up again.
+- Install options per package: scope for new installs, architecture and extra installer arguments, remembered and used for every install and update of that package.
+- Installer details: type, architecture, scope and whether it needs admin, plus the download link, size and SHA-256.
+
 ## 0.1.6 (2026-11-12)
 
 - Filter panel on Installed, Updates and Search: tick which sources to show or search, show only packages that have an update, are pinned or need a reinstall, and on Search match the name, ID or both, optionally exactly. The filter button next to the actions hides it.

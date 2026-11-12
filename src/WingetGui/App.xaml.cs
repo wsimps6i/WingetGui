@@ -12,7 +12,7 @@ public partial class App : Application
     public static AppSettings Settings { get; } = AppSettings.Load();
     public static WingetService Winget { get; } = new();
     public static OperationQueue Queue { get; } = new();
-    public static InstalledStore Installed { get; } = new(Winget);
+    public static InstalledStore Installed { get; } = new(Winget, Settings);
     public static MainWindow Window { get; private set; } = null!;
     public static bool IsExiting { get; private set; }
 
@@ -188,13 +188,17 @@ public partial class App : Application
         Current.Exit();
     }
 
-    public static void Install(PackageItem p, string? version, InstallScope scope) =>
+    /// <param name="options">From the details pane; otherwise the package's saved options, with the default scope.</param>
+    public static void Install(PackageItem p, string? version, PackageOptions? options = null)
+    {
+        options ??= Settings.InstallOptionsFor(p.Id);
         Queue.Enqueue($"Install {p.Name} {version ?? p.AvailableVersion}".TrimEnd(),
-            (progress, ct) => Winget.InstallAsync(p, version, scope, progress, ct));
+            (progress, ct) => Winget.InstallAsync(p, version, options, progress, ct));
+    }
 
     public static void Upgrade(PackageItem p) =>
         Queue.Enqueue($"Update {p.Name} {p.InstalledVersion} → {p.AvailableVersion}",
-            (progress, ct) => Winget.UpgradeAsync(p, progress, ct));
+            (progress, ct) => Winget.UpgradeAsync(p, Settings.OptionsFor(p.Id), progress, ct));
 
     public static void Uninstall(PackageItem p) =>
         Queue.Enqueue($"Uninstall {p.Name} {p.InstalledVersion}".TrimEnd(),

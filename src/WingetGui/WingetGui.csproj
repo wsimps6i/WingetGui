@@ -21,7 +21,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>0.1.6</Version>
+    <Version>0.1.7</Version>
     <Product>Winget GUI</Product>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
     <!-- Program.cs supplies Main: command-line switches run without a window, and the app stays single-instance. -->

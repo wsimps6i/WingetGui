@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.Management.Deployment;
 
 namespace WingetGui.Core;
@@ -25,15 +26,21 @@ public sealed class PackageItem
     /// <summary>winget pin type (Pinning, Blocking, Gating) for an installed package, from `winget pin list`; null when not pinned.</summary>
     public string? Pin { get; set; }
 
+    /// <summary>The version the user chose to skip (AppSettings.SkippedVersions); only matters while it's still the available one.</summary>
+    public string? SkippedVersion { get; set; }
+
     public bool IsInstalled => InstalledVersion is not null;
     public bool IsUpdateNotApplicable => Update == UpdateState.NotApplicable;
     public bool IsPinned => Pin is not null;
+    public bool IsSkipped => Update != UpdateState.None && SkippedVersion is not null && SkippedVersion == AvailableVersion;
 
-    /// <summary>Update selected / Update all include it. Any pin keeps a package out, Gating included: a pin means "leave it to me".</summary>
-    public bool CanUpdate => Update == UpdateState.Available && Pin is null;
+    /// <summary>Update selected / Update all include it. Any pin keeps a package out, Gating included: a pin means "leave it to me". So does skipping this version.</summary>
+    public bool CanUpdate => Update == UpdateState.Available && Pin is null && !IsSkipped;
 
-    /// <summary>Available column text: shows the pin, since a pinned package's update is held back.</summary>
-    public string? AvailableText => Pin is null ? AvailableVersion : $"{AvailableVersion} (pinned)".TrimStart();
+    /// <summary>Available column text: shows a pin or skip, since that update is held back.</summary>
+    public string? AvailableText => Pin is not null ? $"{AvailableVersion} (pinned)".TrimStart()
+        : IsSkipped ? $"{AvailableVersion} (skipped)"
+        : AvailableVersion;
 
     /// <summary>ListView uses this as each row's accessible name, so screen readers read the package rather than the type name.</summary>
     public override string ToString() => InstalledVersion is null ? $"{Name}, {Id}" : $"{Name}, {Id}, version {InstalledVersion}";
@@ -48,7 +55,20 @@ public sealed record PackageDetails(
     string? Homepage,
     string? License,
     string? ReleaseNotes,
-    IReadOnlyList<string> Versions);
+    IReadOnlyList<string> Versions,
+    string? Installer = null); // the installer winget would pick here, e.g. "MSI · x64 · all users · needs admin"
+
+/// <summary>Where the installer comes from, read from `winget show` (the COM API doesn't expose it).</summary>
+public sealed record InstallerDownload(string Url, string? Sha256, long? Size = null);
+
+public enum InstallArchitecture { Default, X64, X86, Arm64 }
+
+/// <summary>Options saved for one package and used for every install and update of it. Scope applies to installs only: an update keeps the installed scope.</summary>
+public sealed record PackageOptions(InstallScope Scope = InstallScope.Default, InstallArchitecture Architecture = InstallArchitecture.Default, string? Arguments = null)
+{
+    [JsonIgnore]
+    public bool IsEmpty => Scope == InstallScope.Default && Architecture == InstallArchitecture.Default && string.IsNullOrWhiteSpace(Arguments);
+}
 
 public sealed record SourceInfo(string Name, string Argument, string Type, bool Explicit, string Trust)
 {

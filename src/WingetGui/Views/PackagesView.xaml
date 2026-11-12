@@ -237,17 +237,65 @@
 
                             <StackPanel x:Name="InstallPanel" Spacing="8">
                                 <ComboBox x:Name="VersionBox" HorizontalAlignment="Stretch" Header="Version" />
-                                <ComboBox x:Name="ScopeBox" HorizontalAlignment="Stretch" Header="Scope">
-                                    <x:String>Default</x:String>
-                                    <x:String>Current user</x:String>
-                                    <x:String>All users (machine)</x:String>
-                                </ComboBox>
                                 <Button Click="InstallOne_Click" Content="Install" Style="{StaticResource AccentButtonStyle}" />
                             </StackPanel>
-                            <StackPanel x:Name="InstalledPanel" Orientation="Horizontal" Spacing="8">
-                                <Button x:Name="UpdateOneButton" Click="UpdateOne_Click" Content="Update" Style="{StaticResource AccentButtonStyle}" />
-                                <Button Click="UninstallOne_Click" Content="Uninstall" />
-                                <Button x:Name="PinButton" Click="Pin_Click" Content="Pin" />
+                            <StackPanel x:Name="InstalledPanel" Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="UpdateOneButton" Click="UpdateOne_Click" Content="Update" Style="{StaticResource AccentButtonStyle}" />
+                                    <Button Click="UninstallOne_Click" Content="Uninstall" />
+                                    <Button x:Name="PinButton" Click="Pin_Click" Content="Pin" />
+                                </StackPanel>
+                                <Button
+                                    x:Name="SkipButton"
+                                    Click="Skip_Click"
+                                    ToolTipService.ToolTip="Hide this version from updates. A newer version shows up again." />
+                            </StackPanel>
+
+                            <!-- Saved per package: used for every install and update of it (scope for installs only). -->
+                            <Expander
+                                x:Name="OptionsExpander"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                AutomationProperties.Name="Install options"
+                                Header="Install options">
+                                <StackPanel Spacing="8">
+                                    <ComboBox x:Name="ScopeBox" HorizontalAlignment="Stretch" Header="Scope (new installs)">
+                                        <x:String>Default</x:String>
+                                        <x:String>Current user</x:String>
+                                        <x:String>All users (machine)</x:String>
+                                    </ComboBox>
+                                    <!-- Items are in InstallArchitecture order. -->
+                                    <ComboBox x:Name="ArchBox" HorizontalAlignment="Stretch" Header="Architecture">
+                                        <x:String>Default</x:String>
+                                        <x:String>x64</x:String>
+                                        <x:String>x86</x:String>
+                                        <x:String>Arm64</x:String>
+                                    </ComboBox>
+                                    <TextBox
+                                        x:Name="ArgsBox"
+                                        Header="Extra installer arguments"
+                                        PlaceholderText="Added to the silent switches" />
+                                    <TextBlock
+                                        x:Name="OptionsNote"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Click="SaveOptions_Click" Content="Remember for this package" />
+                                        <Button x:Name="ForgetOptionsButton" Click="ForgetOptions_Click" Content="Forget" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Expander>
+
+                            <StackPanel x:Name="InstallerPanel" Spacing="2">
+                                <TextBlock x:Name="DetailInstaller" TextWrapping="Wrap" />
+                                <HyperlinkButton x:Name="DetailDownload" Padding="0" />
+                                <TextBlock
+                                    x:Name="DetailSha"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    IsTextSelectionEnabled="True"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    TextWrapping="Wrap" />
                             </StackPanel>
 
                             <TextBlock x:Name="DetailDescription" IsTextSelectionEnabled="True" TextWrapping="Wrap" />
