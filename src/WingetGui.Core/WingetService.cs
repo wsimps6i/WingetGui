@@ -36,12 +36,22 @@ public sealed class WingetService
     /// <summary>
     /// Searches each source on its own and yields each one's results as it finishes: msstore alone
     /// can take most of 30 s (Phase 0), and winget's results shouldn't wait for it.
+    /// <paramref name="hiddenSources"/> null searches every source except explicit ones (winget-font),
+    /// which, as in the CLI, are only searched when asked for.
     /// </summary>
-    public async IAsyncEnumerable<SearchBatch> SearchAsync(string query, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<SearchBatch> SearchAsync(string query, SearchField field = SearchField.Both, bool exact = false,
+        IReadOnlySet<string>? hiddenSources = null, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         var pm = await _pm.Value;
-        // Explicit sources (winget-font) are only searched when asked for by name, as in the CLI.
-        var sources = Items(pm.GetPackageCatalogs()).Where(c => !c.Info.Explicit).ToList();
+        var sources = Items(pm.GetPackageCatalogs())
+            .Where(c => hiddenSources is null ? !c.Info.Explicit : !hiddenSources.Contains(c.Info.Name)).ToList();
+        var option = exact ? PackageFieldMatchOption.EqualsCaseInsensitive : PackageFieldMatchOption.ContainsCaseInsensitive;
+        PackageMatchField[] fields = field switch
+        {
+            SearchField.Name => [PackageMatchField.Name],
+            SearchField.Id => [PackageMatchField.Id],
+            _ => [PackageMatchField.Name, PackageMatchField.Id],
+        };
         var searches = sources.Select(source => Task.Run(async () =>
         {
             var name = source.Info.Name;
@@ -49,12 +59,8 @@ public sealed class WingetService
             {
                 var catalog = Connect(pm, CompositeSearchBehavior.RemotePackagesFromAllCatalogs, [source]);
                 var options = new FindPackagesOptions { ResultLimit = 50 };
-                options.Selectors.Add(new PackageMatchFilter
-                {
-                    Field = PackageMatchField.CatalogDefault,
-                    Option = PackageFieldMatchOption.ContainsCaseInsensitive,
-                    Value = query,
-                });
+                foreach (var f in fields) // a package matching any one selector is returned
+                    options.Selectors.Add(new PackageMatchFilter { Field = f, Option = option, Value = query });
                 var result = await catalog.FindPackagesAsync(options).AsTask(ct);
                 return result.Status == FindPackagesResultStatus.Ok
                     ? new SearchBatch(name, Items(result.Matches).Select(m => ToItem(m.CatalogPackage, name)).ToList(), null)

@@ -13,6 +13,8 @@ public enum PackageMode { Installed, Updates, Search }
 public sealed partial class PackagesView : UserControl
 {
     private readonly PackageMode _mode;
+    private readonly PackageFilter _filter = new();
+    private bool _sourcesLoaded;
     private CancellationTokenSource? _search;
     private int _detailsRequest;
     private bool _confirming;
@@ -30,8 +32,11 @@ public sealed partial class PackagesView : UserControl
         RefreshButton.Visibility = Show(mode != PackageMode.Search);
         MoreButton.Visibility = Show(mode == PackageMode.Installed);
         ScopeBox.SelectedIndex = (int)App.Settings.DefaultInstallScope;
+        FiltersExpander.Visibility = Show(mode != PackageMode.Search);
+        SearchModeExpander.Visibility = Show(mode == PackageMode.Search);
         Status.IsOpen = false;
         UpdateButtons();
+        Loaded += (_, _) => _ = LoadSourcesAsync(); // again each time the page is shown, to pick up sources added or removed
 
         if (mode != PackageMode.Search)
         {
@@ -57,6 +62,7 @@ public sealed partial class PackagesView : UserControl
         IEnumerable<PackageItem> items = App.Installed.Items;
         if (_mode == PackageMode.Updates)
             items = items.Where(p => p.Update != UpdateState.None).OrderBy(p => p.Update); // Available before NotApplicable
+        items = items.Where(_filter.Matches);
         var filter = QueryBox.Text.Trim();
         if (filter.Length > 0)
             items = items.Where(p => p.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase)
@@ -69,13 +75,88 @@ public sealed partial class PackagesView : UserControl
         UpdateButtons();
     }
 
-    private void QueryBox_TextChanged(object sender, TextChangedEventArgs e)
+    private void QueryBox_TextChanged(object sender, TextChangedEventArgs e) => Refilter();
+
+    private void Refilter()
     {
         if (_mode == PackageMode.Search)
             _ = SearchAsync(QueryBox.Text.Trim());
         else
             ShowInstalled();
     }
+
+    /// <summary>One tick box per winget source, keeping what was unticked. Installed and Updates also get one for apps winget didn't install.</summary>
+    private async Task LoadSourcesAsync()
+    {
+        IReadOnlyList<SourceInfo> sources;
+        try
+        {
+            sources = await App.Winget.GetSourcesAsync();
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Listing sources for the filter panel failed: {ex.Message}"); // the list itself reports winget not starting
+            return;
+        }
+        if (!_sourcesLoaded && _mode == PackageMode.Search)
+            foreach (var s in sources.Where(s => s.Explicit))
+                _filter.HiddenSources.Add(s.Name); // as in the CLI, explicit sources (winget-font) are searched only when asked for
+        _sourcesLoaded = true;
+
+        var names = sources.Select(s => s.Name).ToList();
+        if (_mode != PackageMode.Search)
+            names.Add("");
+        SourceChecks.Children.Clear();
+        foreach (var name in names)
+        {
+            var box = new CheckBox { Content = name.Length > 0 ? name : "Not from a source", Tag = name, IsChecked = !_filter.HiddenSources.Contains(name) };
+            box.Click += SourceCheck_Click;
+            SourceChecks.Children.Add(box);
+        }
+    }
+
+    private void SourceCheck_Click(object sender, RoutedEventArgs e)
+    {
+        var box = (CheckBox)sender;
+        if (box.IsChecked == true)
+            _filter.HiddenSources.Remove((string)box.Tag);
+        else
+            _filter.HiddenSources.Add((string)box.Tag);
+        Refilter();
+    }
+
+    private void SelectAllSources_Click(object sender, RoutedEventArgs e) => SetAllSources(true);
+
+    private void ClearSources_Click(object sender, RoutedEventArgs e) => SetAllSources(false);
+
+    private void SetAllSources(bool ticked)
+    {
+        foreach (var box in SourceChecks.Children.OfType<CheckBox>())
+        {
+            box.IsChecked = ticked;
+            if (ticked)
+                _filter.HiddenSources.Remove((string)box.Tag);
+            else
+                _filter.HiddenSources.Add((string)box.Tag);
+        }
+        Refilter();
+    }
+
+    private void Filter_Click(object sender, RoutedEventArgs e)
+    {
+        _filter.OnlyUpdates = HasUpdateCheck.IsChecked == true;
+        _filter.OnlyPinned = PinnedCheck.IsChecked == true;
+        _filter.OnlyNeedsReinstall = ReinstallCheck.IsChecked == true;
+        ShowInstalled();
+    }
+
+    private void SearchMode_Changed(object sender, object e)
+    {
+        if (IsLoaded) // SelectedIndex in XAML fires this during InitializeComponent
+            Refilter();
+    }
+
+    private void FilterToggle_Click(object sender, RoutedEventArgs e) => FilterPanel.Visibility = Show(FilterToggle.IsChecked == true);
 
     private async Task SearchAsync(string query)
     {
@@ -96,7 +177,11 @@ public sealed partial class PackagesView : UserControl
             LoadingBar.Visibility = Visibility.Visible;
             Status.IsOpen = false;
             var failed = new List<string>();
-            await foreach (var batch in App.Winget.SearchAsync(query, cts.Token))
+            if (_sourcesLoaded && SourceChecks.Children.OfType<CheckBox>().All(c => c.IsChecked != true))
+                ShowStatus(InfoBarSeverity.Informational, "Tick at least one source to search.");
+            // A copy: ticking boxes mid-search mustn't change the set the search threads read. Null until sources load = the default sources.
+            var hidden = _sourcesLoaded ? new HashSet<string>(_filter.HiddenSources, StringComparer.OrdinalIgnoreCase) : null;
+            await foreach (var batch in App.Winget.SearchAsync(query, (SearchField)Math.Max(0, FieldButtons.SelectedIndex), ExactCheck.IsChecked == true, hidden, cts.Token))
             {
                 foreach (var item in batch.Items)
                     results.Add(item);

@@ -31,7 +31,7 @@ public sealed partial class MainWindow : Window
         var scale = GetDpiForWindow(WindowNative.GetWindowHandle(this)) / 96.0;
         // Centre on the work area (excludes the taskbar), shrinking to fit small screens.
         var work = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
-        var width = Math.Min((int)(1240 * scale), work.Width - (int)(32 * scale));
+        var width = Math.Min((int)(1480 * scale), work.Width - (int)(32 * scale));
         var height = Math.Min((int)(780 * scale), work.Height - (int)(32 * scale));
         AppWindow.MoveAndResize(new RectInt32(work.X + (work.Width - width) / 2, work.Y + (work.Height - height) / 2, width, height));
         AppWindow.SetIcon(App.IconPath);

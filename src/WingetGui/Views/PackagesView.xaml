@@ -13,8 +13,89 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-        <StackPanel Orientation="Horizontal" Spacing="12">
+        <!-- Filter panel, between the menu and the list. Changes apply straight away. -->
+        <ScrollViewer
+            x:Name="FilterPanel"
+            Grid.RowSpan="4"
+            Width="230"
+            Margin="0,8,16,0"
+            VerticalScrollBarVisibility="Auto">
+            <StackPanel Spacing="8">
+                <Expander AutomationProperties.Name="Sources" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" IsExpanded="True">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon FontSize="16" Glyph="&#xE774;" />
+                            <TextBlock Text="Sources" />
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel>
+                        <StackPanel Margin="-12,0,0,4" Orientation="Horizontal">
+                            <HyperlinkButton Click="SelectAllSources_Click" Content="Select all" />
+                            <HyperlinkButton Click="ClearSources_Click" Content="Clear selection" />
+                        </StackPanel>
+                        <StackPanel x:Name="SourceChecks" />
+                    </StackPanel>
+                </Expander>
+
+                <Expander
+                    x:Name="FiltersExpander"
+                    AutomationProperties.Name="Filters"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon FontSize="16" Glyph="&#xE71C;" />
+                            <TextBlock Text="Filters" />
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel>
+                        <TextBlock
+                            Margin="0,0,0,4"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="Show only packages that:"
+                            TextWrapping="Wrap" />
+                        <CheckBox x:Name="HasUpdateCheck" Click="Filter_Click" Content="Have an update" />
+                        <CheckBox x:Name="PinnedCheck" Click="Filter_Click" Content="Are pinned" />
+                        <CheckBox x:Name="ReinstallCheck" Click="Filter_Click" Content="Need a reinstall to update" />
+                    </StackPanel>
+                </Expander>
+
+                <Expander
+                    x:Name="SearchModeExpander"
+                    AutomationProperties.Name="Search mode"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Stretch"
+                    IsExpanded="True">
+                    <Expander.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <FontIcon FontSize="16" Glyph="&#xE721;" />
+                            <TextBlock Text="Search mode" />
+                        </StackPanel>
+                    </Expander.Header>
+                    <StackPanel>
+                        <!-- Items are in SearchField order. -->
+                        <RadioButtons
+                            x:Name="FieldButtons"
+                            AutomationProperties.Name="Match"
+                            SelectedIndex="2"
+                            SelectionChanged="SearchMode_Changed">
+                            <x:String>Package name</x:String>
+                            <x:String>Package ID</x:String>
+                            <x:String>Both</x:String>
+                        </RadioButtons>
+                        <CheckBox x:Name="ExactCheck" Click="SearchMode_Changed" Content="Exact match" />
+                    </StackPanel>
+                </Expander>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12">
             <TextBlock x:Name="TitleText" Style="{StaticResource TitleTextBlockStyle}" />
             <TextBlock
                 x:Name="CountText"
@@ -23,7 +104,7 @@
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
         </StackPanel>
 
-        <Grid Grid.Row="1" ColumnSpacing="8">
+        <Grid Grid.Row="1" Grid.Column="1" ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" MaxWidth="480" />
                 <ColumnDefinition Width="*" />
@@ -31,6 +112,14 @@
             </Grid.ColumnDefinitions>
             <TextBox x:Name="QueryBox" TextChanged="QueryBox_TextChanged" />
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                <ToggleButton
+                    x:Name="FilterToggle"
+                    AutomationProperties.Name="Show filters"
+                    Click="FilterToggle_Click"
+                    IsChecked="True"
+                    ToolTipService.ToolTip="Show or hide filters">
+                    <FontIcon FontSize="16" Glyph="&#xE71C;" />
+                </ToggleButton>
                 <Button x:Name="InstallSelectedButton" Click="InstallSelected_Click" Content="Install selected" Style="{StaticResource AccentButtonStyle}" />
                 <Button x:Name="UpdateSelectedButton" Click="UpdateSelected_Click" Content="Update selected" />
                 <Button x:Name="UpdateAllButton" Click="UpdateAll_Click" Content="Update all" Style="{StaticResource AccentButtonStyle}" />
@@ -53,12 +142,12 @@
             </StackPanel>
         </Grid>
 
-        <StackPanel Grid.Row="2">
+        <StackPanel Grid.Row="2" Grid.Column="1">
             <ProgressBar x:Name="LoadingBar" IsIndeterminate="True" Visibility="Collapsed" />
             <InfoBar x:Name="Status" IsClosable="True" />
         </StackPanel>
 
-        <Grid Grid.Row="3" ColumnSpacing="16">
+        <Grid Grid.Row="3" Grid.Column="1" ColumnSpacing="16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="320" />

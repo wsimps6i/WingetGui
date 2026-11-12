@@ -63,3 +63,24 @@ public sealed record OperationProgress(string Stage, double? Percent);
 public sealed record OperationResult(bool Success, string Message, bool RebootRequired = false);
 
 public enum InstallScope { Default, User, Machine }
+
+/// <summary>Which field a catalog search matches, in the Search mode buttons' order.</summary>
+public enum SearchField { Name, Id, Both }
+
+/// <summary>The filter panel's state on the Installed and Updates pages.</summary>
+public sealed class PackageFilter
+{
+    /// <summary>Unticked sources. "" stands for packages not from a source (Add/Remove Programs only).</summary>
+    public HashSet<string> HiddenSources { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public bool OnlyUpdates { get; set; }
+    public bool OnlyPinned { get; set; }
+    public bool OnlyNeedsReinstall { get; set; }
+
+    /// <summary>Ticked filters combine with OR: Pinned plus Has an update shows both kinds. None ticked shows everything.</summary>
+    public bool Matches(PackageItem p) =>
+        !HiddenSources.Contains(p.Source)
+        && (!(OnlyUpdates || OnlyPinned || OnlyNeedsReinstall)
+            || (OnlyUpdates && p.Update == UpdateState.Available)
+            || (OnlyPinned && p.IsPinned)
+            || (OnlyNeedsReinstall && p.IsUpdateNotApplicable));
+}

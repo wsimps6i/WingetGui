@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6 (2026-11-12)
+
+- Filter panel on Installed, Updates and Search: tick which sources to show or search, show only packages that have an update, are pinned or need a reinstall, and on Search match the name, ID or both, optionally exactly. The filter button next to the actions hides it.
+- The window opens wider (still fitted to smaller screens) to make room for the panel.
+- Search now matches name and ID only, not tags.
+
 ## 0.1.5 (2026-11-12)
 
 - Settings → About: the update buttons are stacked, so the version and download status are no longer cut off.
