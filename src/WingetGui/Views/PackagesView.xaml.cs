@@ -201,10 +201,20 @@ public sealed partial class PackagesView : UserControl
         }
     }
 
+    private void SelectAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (SelectAllCheck.IsChecked == true)
+            List.SelectAll();
+        else
+            List.SelectedItems.Clear();
+    }
+
     private async void List_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         UpdateButtons();
         var selected = Selected;
+        // Ticked, unticked, or the dash for "some".
+        SelectAllCheck.IsChecked = selected.Count == 0 ? false : selected.Count == List.Items.Count ? true : null;
         var request = ++_detailsRequest;
         if (selected.Count != 1)
         {

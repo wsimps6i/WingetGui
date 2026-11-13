@@ -264,10 +264,13 @@ public sealed class WingetService
             _ => new(Stage(p.State.ToString()), null),
         }, target);
 
-    /// <summary>"Downloading 42% (12.3 of 29.1 MB)". Exe/MSI installers report no install progress (0), so that stays indeterminate.</summary>
+    /// <summary>
+    /// "Downloading 42% (12.3 of 29.1 MB)". Exe/MSI installers report no real install progress: 0, or 1 (100%) as soon as
+    /// they start (seen with an MSI). A finished stage moves on to the next state, so both mean "unknown" and stay indeterminate.
+    /// </summary>
     internal static OperationProgress Progress(string stage, double fraction, ulong done = 0, ulong total = 0)
     {
-        if (fraction <= 0) return new(stage + "…", null);
+        if (fraction is <= 0 or >= 1) return new(stage + "…", null);
         var text = $"{stage} {fraction:P0}";
         if (total > 0) text += $" ({done / 1048576.0:0.0} of {total / 1048576.0:0.0} MB)";
         return new(text, fraction);

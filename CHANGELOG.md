@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.8 (2026-11-13)
+
+- Tick boxes on every row of Installed, Updates and Search, and a select-all box in the header (a dash when only some are ticked), so picking several packages is obvious. Clicking a row ticks it.
+- Installs that report 100% while still running (seen with MSI installers) show "Installing…" with a moving bar instead of a full one.
+
 ## 0.1.7 (2026-11-12)
 
 - Skip a version: hide one available version of a package from updates (Update all, the count, notifications and `-UpdateAll`); a newer version shows up again.

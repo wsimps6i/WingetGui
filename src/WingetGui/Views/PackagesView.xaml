@@ -158,25 +158,34 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
-                <Grid Padding="16,0,12,6" ColumnSpacing="8">
+                <!-- The first column lines the select-all box up with the rows' tick boxes (SelectionMode="Multiple"). -->
+                <Grid Padding="8,0,12,6" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="{StaticResource NameColumnWidth}" />
                         <ColumnDefinition Width="{StaticResource IdColumnWidth}" />
                         <ColumnDefinition Width="{StaticResource VersionColumnWidth}" />
                         <ColumnDefinition Width="{StaticResource VersionColumnWidth}" />
                         <ColumnDefinition Width="{StaticResource SourceColumnWidth}" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="Name" />
-                    <TextBlock Grid.Column="1" Style="{StaticResource CaptionTextBlockStyle}" Text="Id" />
-                    <TextBlock Grid.Column="2" Style="{StaticResource CaptionTextBlockStyle}" Text="Installed" />
-                    <TextBlock Grid.Column="3" Style="{StaticResource CaptionTextBlockStyle}" Text="Available" />
-                    <TextBlock Grid.Column="4" Style="{StaticResource CaptionTextBlockStyle}" Text="Source" />
+                    <CheckBox
+                        x:Name="SelectAllCheck"
+                        Width="28"
+                        MinWidth="0"
+                        AutomationProperties.Name="Select all"
+                        Click="SelectAll_Click"
+                        ToolTipService.ToolTip="Select all" />
+                    <TextBlock Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" Text="Name" />
+                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" Text="Id" />
+                    <TextBlock Grid.Column="3" VerticalAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" Text="Installed" />
+                    <TextBlock Grid.Column="4" VerticalAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" Text="Available" />
+                    <TextBlock Grid.Column="5" VerticalAlignment="Center" Style="{StaticResource CaptionTextBlockStyle}" Text="Source" />
                 </Grid>
                 <ListView
                     x:Name="List"
                     Grid.Row="1"
                     SelectionChanged="List_SelectionChanged"
-                    SelectionMode="Extended">
+                    SelectionMode="Multiple">
                     <ListView.ItemTemplate>
                         <DataTemplate x:DataType="core:PackageItem">
                             <Grid Height="36" ColumnSpacing="8">

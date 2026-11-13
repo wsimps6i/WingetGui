@@ -38,6 +38,7 @@ public class LogAndTextTests
         Assert.Equal(new OperationProgress("Downloading 50% (1.0 of 2.0 MB)", 0.5), WingetService.Progress("Downloading", 0.5, 1048576, 2097152));
         Assert.Equal(new OperationProgress("Installing 25%", 0.25), WingetService.Progress("Installing", 0.25));
         Assert.Equal(new OperationProgress("Installing…", null), WingetService.Progress("Installing", 0));
+        Assert.Equal(new OperationProgress("Installing…", null), WingetService.Progress("Installing", 1)); // MSI reports 100% while still running
     }
 
     [Fact]
