@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9 (2026-11-15)
+
+- Smaller download: the release zip is 83 MB instead of 102 MB (219 MB and 328 files installed, from 266 MB and 522). Unused parts of the Windows App SDK are left out: Windows AI/ML (ONNX Runtime, DirectML), Widgets, and WinUI's built-in text in languages other than English.
+
 ## 0.1.8 (2026-11-13)
 
 - Tick boxes on every row of Installed, Updates and Search, and a select-all box in the header (a dash when only some are ticked), so picking several packages is obvious. Clicking a row ticks it.

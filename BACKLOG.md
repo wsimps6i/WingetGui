@@ -3,7 +3,8 @@
 ## Known limitations
 
 - **Not code-signed.** SmartScreen warns on first run, and self-update trusts the SHA-256 digest GitHub publishes for the release zip: that proves the download is the released file, not who released it. Signing (and checking the signature before applying an update) is the fix.
-- **Size.** The release zip is ~100 MB because .NET and the Windows App SDK are bundled (self-contained, so nothing else needs installing). Trimming or framework-dependent builds could shrink it.
+- **Size.** The release zip is ~83 MB because .NET and the Windows App SDK are bundled (self-contained, so nothing else needs installing). 0.1.9 left out the unused Windows AI/ML, Widgets and non-English resources; trimming (`PublishTrimmed`) is the next big step, but needs a source-generated settings serializer and a full test pass. Framework-dependent builds would need users to install two runtimes first.
+- **Windows in another display language**: WinUI's built-in control text (e.g. screen-reader labels) is English only since 0.1.9.
 - **Source add/remove/reset on a separate admin account**: the elevated process may not have the `winget` app alias; the error says so.
 - **Pin list parsing** reads `winget pin list`'s table (no JSON output). A localised header with a space in an earlier column name would shift columns; reading winget's `pinning.db` would fix it.
 - **Notifications** depend on the Start menu shortcut (it carries the app ID and click handler). Deleting it stops notifications until the app recreates it on next start. The click handler's CLSID is read from the Windows App SDK's registry entry, which isn't public API.

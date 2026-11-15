@@ -21,9 +21,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>0.1.8</Version>
+    <Version>0.1.9</Version>
     <Product>Winget GUI</Product>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Release'">true</PublishReadyToRun>
+    <!-- The UI is English only; skips .NET's translated resource folders (176 files). -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <!-- Program.cs supplies Main: command-line switches run without a window, and the app stays single-instance. -->
     <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
   </PropertyGroup>
@@ -31,6 +33,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.7705" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260317003" />
+    <!-- Their C# wrappers, unused (the native side is excluded by ExcludeUnusedWindowsAppSDKFiles below). Versions are the
+         ones the metapackage pins; update together. The metapackage stays: H.NotifyIcon.WinUI depends on it. -->
+    <PackageReference Include="Microsoft.WindowsAppSDK.AI" Version="1.8.53" ExcludeAssets="all" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.ML" Version="1.8.2141" ExcludeAssets="all" />
     <!-- Also referenced by Core, but needed here too: the package copies its native activation dll from build/ targets,
          which only run in projects that reference it directly. Without it: REGDB_E_CLASSNOTREG at new PackageManager(). -->
     <PackageReference Include="Microsoft.WindowsPackageManager.ComInterop" Version="1.29.380" />
@@ -41,6 +47,29 @@
   <ItemGroup>
     <ProjectReference Include="..\WingetGui.Core\WingetGui.Core.csproj" />
   </ItemGroup>
+
+  <!--
+    Self-contained mode copies everything in the Windows App Runtime MSIX next to the exe, including Windows AI/ML
+    (ONNX Runtime and DirectML alone are ~38 MB), Widgets, and WinUI's built-in text in ~90 languages. None of that is
+    used, so leave it out through the SDK's own exclusion list. Runs after the MSIX is unpacked so the wildcards match.
+    If a Windows App SDK update renames these files they simply come back; nothing breaks.
+  -->
+  <Target Name="ExcludeUnusedWindowsAppSDKFiles"
+          BeforeTargets="AddMicrosoftWindowsAppSDKPayloadFilesFromMsix"
+          DependsOnTargets="ExtractMicrosoftWindowsAppSDKMsixFiles">
+    <ItemGroup>
+      <MicrosoftWindowsAppSDKFilesExcluded Include="$(MicrosoftWindowsAppSDKMsixContent)\onnxruntime*.dll" />
+      <MicrosoftWindowsAppSDKFilesExcluded Include="$(MicrosoftWindowsAppSDKMsixContent)\DirectML.dll" />
+      <MicrosoftWindowsAppSDKFilesExcluded Include="$(MicrosoftWindowsAppSDKMsixContent)\Microsoft.Windows.AI.*.dll" />
+      <MicrosoftWindowsAppSDKFilesExcluded Include="$(MicrosoftWindowsAppSDKMsixContent)\Microsoft.Windows.Workloads*.dll" />
+      <MicrosoftWindowsAppSDKFilesExcluded Include="$(MicrosoftWindowsAppSDKMsixContent)\workloads*.json" />
+      <MicrosoftWindowsAppSDKFilesExcluded Include="$(MicrosoftWindowsAppSDKMsixContent)\NpuDetect\**" />
+      <MicrosoftWindowsAppSDKFilesExcluded Include="$(MicrosoftWindowsAppSDKMsixContent)\Microsoft.Windows.Widgets.dll" />
+      <!-- The UI is English only; other languages fall back to English. -->
+      <MicrosoftWindowsAppSDKFilesExcluded Include="$(MicrosoftWindowsAppSDKMsixContent)\**\*.mui"
+                                           Exclude="$(MicrosoftWindowsAppSDKMsixContent)\en-*\*.mui" />
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
